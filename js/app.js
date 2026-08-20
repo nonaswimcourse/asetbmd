@@ -427,14 +427,38 @@ importFileInput.addEventListener("change", async (e) => {
   const schema = currentSchema();
 
   try {
-    const rows = await parseExcelFile(file, schema);
-    if (rows.length === 0) {
-      alert("Tidak ada baris valid ditemukan pada file.");
+    const allRows = await parseExcelFile(file, schema);
+    const requiredKeys = schema.fields.filter((f) => f.required).map((f) => f.key);
+
+    const validRows = [];
+    const skipped = [];
+    allRows.forEach((row, idx) => {
+      const missing = requiredKeys.filter((k) => !row[k] || String(row[k]).trim() === "");
+      if (missing.length > 0) {
+        skipped.push(`Baris ${idx + 2}: kolom wajib kosong (${missing.join(", ")})`);
+      } else {
+        validRows.push(row);
+      }
+    });
+
+    if (validRows.length === 0) {
+      alert(
+        "Tidak ada baris valid untuk diimpor.\n\n" +
+          (skipped.length ? "Masalah:\n" + skipped.slice(0, 15).join("\n") : "")
+      );
     } else {
-      const { error } = await supabase.from(schema.table).insert(rows);
-      if (error) alert("Gagal mengimpor: " + error.message);
-      else {
-        alert(`${rows.length} baris berhasil diimpor.`);
+      const { error } = await supabase.from(schema.table).insert(validRows);
+      if (error) {
+        alert("Gagal mengimpor: " + error.message);
+      } else {
+        let msg = `${validRows.length} baris berhasil diimpor.`;
+        if (skipped.length > 0) {
+          msg +=
+            `\n\n${skipped.length} baris dilewati karena data wajib kosong:\n` +
+            skipped.slice(0, 15).join("\n") +
+            (skipped.length > 15 ? `\n… dan ${skipped.length - 15} baris lainnya.` : "");
+        }
+        alert(msg);
         loadData();
       }
     }
@@ -444,6 +468,12 @@ importFileInput.addEventListener("change", async (e) => {
     importFileInput.value = "";
   }
 });
+
+function normalizeLabel(str) {
+  return String(str)
+    .toLowerCase()
+    .replace(/[\s_\-./]+/g, ""); // buang spasi, garis bawah, strip, titik, garis miring, baris baru
+}
 
 function parseExcelFile(file, schema) {
   return new Promise((resolve, reject) => {
@@ -455,16 +485,21 @@ function parseExcelFile(file, schema) {
         const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
         const labelToKey = {};
-        schema.fields.forEach((f) => (labelToKey[f.label.trim().toLowerCase()] = f.key));
+        schema.fields.forEach((f) => (labelToKey[normalizeLabel(f.label)] = f.key));
 
-        const rows = json.map((row) => {
-          const mapped = {};
-          Object.entries(row).forEach(([label, value]) => {
-            const key = labelToKey[String(label).trim().toLowerCase()];
-            if (key) mapped[key] = value;
-          });
-          return mapped;
-        });
+        const rows = json
+          .map((row) => {
+            const mapped = {};
+            Object.entries(row).forEach(([label, value]) => {
+              const key = labelToKey[normalizeLabel(label)];
+              if (key) mapped[key] = value;
+            });
+            return mapped;
+          })
+          // buang baris yang seluruh isinya kosong (mis. baris kosong di akhir file)
+          .filter((mapped) =>
+            Object.values(mapped).some((v) => v !== "" && v !== null && v !== undefined)
+          );
         resolve(rows);
       } catch (err) {
         reject(err);
