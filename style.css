@@ -149,6 +149,35 @@ tbody tr:hover { background: #f9fafb; }
   display: flex; justify-content: flex-end; gap: 0.6rem; padding: 1rem 1.4rem; border-top: 1px solid #f0f1f3;
 }
 
+/* Batch/auto-register section in add form */
+.batch-section {
+  margin-top: 1.2rem; padding: 0.9rem 1rem; background: #eff6ff; border: 1px solid #bfdbfe;
+  border-radius: 10px;
+}
+.batch-section label { display: block; font-size: 0.8rem; font-weight: 700; margin-bottom: 0.4rem; color: #1e3a8a; }
+.batch-section input {
+  width: 120px; padding: 0.5rem 0.65rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.88rem;
+  font-family: inherit;
+}
+.batch-section p { margin: 0.5rem 0 0; line-height: 1.4; }
+
+/* Grouped table view */
+.group-row { cursor: pointer; background: #f9fafb; font-weight: 600; }
+.group-row:hover { background: #f0f2f5; }
+.group-row td { border-bottom: 1px solid #e5e7eb; }
+.group-caret { display: inline-block; margin-right: 0.5rem; transition: transform 0.15s ease; }
+.group-row.expanded .group-caret { transform: rotate(90deg); }
+.group-count-badge {
+  display: inline-block; background: #dbeafe; color: #1e40af; border-radius: 999px;
+  padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 700; margin-left: 0.4rem;
+}
+.group-children-row { display: none; }
+.group-children-row.open { display: table-row; }
+.group-children-row td { padding: 0; border-bottom: 1px solid #e5e7eb; }
+.group-children-row table { width: 100%; }
+.group-children-row th { background: #f3f4f6; font-size: 0.78rem; }
+.group-children-row td.child-cell { padding: 0.55rem 0.8rem 0.55rem 2.4rem; }
+
 @media (max-width: 720px) {
   .app-shell { flex-direction: column; }
   .sidebar { width: 100%; flex-direction: row; overflow-x: auto; }
