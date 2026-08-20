@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arsip Aset KIB A-E</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- SheetJS: baca/tulis Excel -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF + autotable: ekspor PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+  <!-- LAYAR LOGIN -->
+  <div id="loginScreen" class="login-wrap">
+    <form id="loginForm" class="login-card">
+      <h1>Arsip Aset KIB A–E</h1>
+      <p class="muted">Masuk untuk mengelola data inventaris aset daerah.</p>
+      <label>Email</label>
+      <input id="loginEmail" type="email" required placeholder="admin@instansi.go.id" />
+      <label>Password</label>
+      <input id="loginPassword" type="password" required placeholder="••••••••" />
+      <div id="loginError" class="error-box" style="display:none"></div>
+      <button type="submit" id="loginBtn">Masuk</button>
+      <p class="muted small">Belum punya akun? Buat user lewat Supabase Dashboard → Authentication → Users.</p>
+    </form>
+  </div>
+
+  <!-- APLIKASI UTAMA -->
+  <div id="appShell" class="app-shell" style="display:none">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-badge">KIB</div>
+        <div>
+          <div class="brand-title">Arsip Aset Daerah</div>
+          <div class="brand-sub">Kartu Inventaris Barang</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+      <div class="sidebar-footer">
+        <div class="muted small" id="userEmailLabel"></div>
+        <button class="btn-secondary small" id="logoutBtn">Keluar</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="table-header">
+        <div>
+          <h2 id="pageTitle"></h2>
+          <p class="muted" id="pageDesc"></p>
+        </div>
+        <div class="toolbar">
+          <input type="text" id="searchInput" class="search-input" placeholder="Cari data…" />
+          <button class="btn-primary" id="addBtn">+ Tambah Data</button>
+          <button class="btn-secondary" id="exportExcelBtn">⬇ Excel</button>
+          <button class="btn-secondary" id="exportPdfBtn">⬇ PDF</button>
+          <label class="btn-secondary file-label">
+            ⬆ Impor Excel
+            <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" hidden />
+          </label>
+        </div>
+      </div>
+
+      <div id="errorBox" class="error-box" style="display:none"></div>
+
+      <div class="table-scroll">
+        <table>
+          <thead><tr id="tableHeadRow"></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="pagination">
+        <button id="prevPageBtn">← Sebelumnya</button>
+        <span id="pageInfo"></span>
+        <button id="nextPageBtn">Selanjutnya →</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL TAMBAH/EDIT -->
+  <div id="formModalOverlay" class="modal-overlay" style="display:none">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="formModalTitle">Tambah Data Aset</h2>
+        <button class="icon-btn" id="formModalClose">✕</button>
+      </div>
+      <form id="assetForm" class="modal-body">
+        <div class="form-grid" id="formGrid"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="formCancelBtn">Batal</button>
+          <button type="submit" class="btn-primary" id="formSaveBtn">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL KONFIRMASI HAPUS -->
+  <div id="confirmModalOverlay" class="modal-overlay" style="display:none">
+    <div class="confirm-card">
+      <p id="confirmMessage"></p>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="confirmCancelBtn">Batal</button>
+        <button class="btn-danger" id="confirmDeleteBtn">Hapus</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
