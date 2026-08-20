@@ -13,6 +13,8 @@ let search = "";
 let totalCount = 0;
 let editingRow = null; // record currently in the add/edit modal
 let deleteTarget = null;
+let groupedView = true; // tampilan tabel dikelompokkan otomatis berdasarkan Nama Barang
+let openGroupKeys = new Set(); // grup mana saja yang sedang di-expand (per nama_barang)
 
 // ---------- DOM refs ----------
 const loginScreen = document.getElementById("loginScreen");
@@ -26,6 +28,7 @@ const sidebarNav = document.getElementById("sidebarNav");
 const pageTitle = document.getElementById("pageTitle");
 const pageDesc = document.getElementById("pageDesc");
 const searchInput = document.getElementById("searchInput");
+const groupToggleBtn = document.getElementById("groupToggleBtn");
 const addBtn = document.getElementById("addBtn");
 const exportExcelBtn = document.getElementById("exportExcelBtn");
 const exportPdfBtn = document.getElementById("exportPdfBtn");
@@ -36,6 +39,7 @@ const tableBody = document.getElementById("tableBody");
 const prevPageBtn = document.getElementById("prevPageBtn");
 const nextPageBtn = document.getElementById("nextPageBtn");
 const pageInfo = document.getElementById("pageInfo");
+const pagination = document.getElementById("pagination");
 
 const formModalOverlay = document.getElementById("formModalOverlay");
 const formModalTitle = document.getElementById("formModalTitle");
@@ -44,6 +48,8 @@ const assetForm = document.getElementById("assetForm");
 const formGrid = document.getElementById("formGrid");
 const formCancelBtn = document.getElementById("formCancelBtn");
 const formSaveBtn = document.getElementById("formSaveBtn");
+const batchSection = document.getElementById("batchSection");
+const batchQtyInput = document.getElementById("batchQtyInput");
 
 const confirmModalOverlay = document.getElementById("confirmModalOverlay");
 const confirmMessage = document.getElementById("confirmMessage");
@@ -113,6 +119,7 @@ function buildSidebar() {
       page = 0;
       search = "";
       searchInput.value = "";
+      openGroupKeys.clear();
       buildSidebar();
       loadData();
     });
@@ -122,17 +129,30 @@ function buildSidebar() {
 
 // ================= DATA LOADING =================
 
+function searchableColumns(schema) {
+  return schema.fields
+    .filter((f) => f.type === "text")
+    .slice(0, 4)
+    .map((f) => f.key);
+}
+
 async function loadData() {
   const schema = currentSchema();
   pageTitle.textContent = schema.title;
   pageDesc.textContent = schema.description;
   errorBox.style.display = "none";
-  tableBody.innerHTML = `<tr><td class="muted center" colspan="99">Memuat data…</td></tr>`;
 
-  const searchableCols = schema.fields
-    .filter((f) => f.type === "text")
-    .slice(0, 4)
-    .map((f) => f.key);
+  if (groupedView) {
+    await loadGroupedData(schema);
+  } else {
+    await loadFlatData(schema);
+  }
+}
+
+// Mode normal (paginated), tampilan tabel datar seperti sebelumnya
+async function loadFlatData(schema) {
+  tableBody.innerHTML = `<tr><td class="muted center" colspan="99">Memuat data…</td></tr>`;
+  pagination.style.display = "flex";
 
   let query = supabase
     .from(schema.table)
@@ -141,7 +161,9 @@ async function loadData() {
     .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
   if (search.trim()) {
-    const orFilter = searchableCols.map((c) => `${c}.ilike.%${search.trim()}%`).join(",");
+    const orFilter = searchableColumns(schema)
+      .map((c) => `${c}.ilike.%${search.trim()}%`)
+      .join(",");
     query = query.or(orFilter);
   }
 
@@ -159,6 +181,36 @@ async function loadData() {
   updatePagination();
 }
 
+// Mode kelompok: ambil seluruh data yang cocok (tanpa halaman), lalu dikelompokkan
+// otomatis berdasarkan "Nama Barang" di sisi klien. Ini tidak menyentuh/menghapus
+// fungsi impor Excel — impor tetap memasukkan seluruh baris apa adanya ke tabel.
+async function loadGroupedData(schema) {
+  tableBody.innerHTML = `<tr><td class="muted center" colspan="99">Memuat & mengelompokkan data…</td></tr>`;
+  pagination.style.display = "none";
+
+  let query = supabase.from(schema.table).select("*").order("nama_barang").order("nomor_register");
+
+  if (search.trim()) {
+    const orFilter = searchableColumns(schema)
+      .map((c) => `${c}.ilike.%${search.trim()}%`)
+      .join(",");
+    query = query.or(orFilter);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    errorBox.textContent = error.message;
+    errorBox.style.display = "block";
+    renderGroupedTable(schema, []);
+    return;
+  }
+
+  totalCount = (data || []).length;
+  renderGroupedTable(schema, data || []);
+  pageInfo.textContent = `${totalCount} data (dikelompokkan otomatis)`;
+}
+
 function updatePagination() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   pageInfo.textContent = `Halaman ${page + 1} dari ${totalPages} (${totalCount} data)`;
@@ -174,6 +226,13 @@ prevPageBtn.addEventListener("click", () => {
 });
 nextPageBtn.addEventListener("click", () => {
   page += 1;
+  loadData();
+});
+
+groupToggleBtn.addEventListener("click", () => {
+  groupedView = !groupedView;
+  groupToggleBtn.textContent = `🗂 Tampilan Kelompok: ${groupedView ? "Aktif" : "Nonaktif"}`;
+  page = 0;
   loadData();
 });
 
@@ -223,6 +282,107 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
+}
+
+// ================= GROUPED TABLE RENDER =================
+// Mengelompokkan otomatis berdasarkan "Nama Barang" yang sama. Setiap grup
+// menampilkan ringkasan (jumlah unit + rentang No. Register), dan bisa
+// di-expand untuk melihat & mengelola tiap unit satu per satu.
+
+function groupRowsByName(rows) {
+  const map = new Map();
+  rows.forEach((row) => {
+    const key = (row.nama_barang || "(Tanpa Nama Barang)").trim() || "(Tanpa Nama Barang)";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(row);
+  });
+  return Array.from(map.entries()).map(([name, items]) => {
+    const regs = items
+      .map((r) => r.nomor_register)
+      .filter((v) => v !== null && v !== undefined && String(v).trim() !== "");
+    let regRange = "-";
+    if (regs.length === 1) {
+      regRange = regs[0];
+    } else if (regs.length > 1) {
+      const sorted = [...regs].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+      regRange = `${sorted[0]} – ${sorted[sorted.length - 1]}`;
+    }
+    return { name, items, count: items.length, regRange };
+  });
+}
+
+function renderGroupedTable(schema, rows) {
+  const displayFields = schema.fields.slice(0, 7);
+
+  tableHeadRow.innerHTML =
+    `<th style="width:2rem"></th><th>Nama Barang</th><th>Jumlah Unit</th><th>Rentang No. Register</th><th>Aksi</th>`;
+
+  if (rows.length === 0) {
+    tableBody.innerHTML = `<tr><td class="muted center" colspan="5">Belum ada data. Klik "Tambah Data" untuk mulai mengisi.</td></tr>`;
+    return;
+  }
+
+  const groups = groupRowsByName(rows);
+  tableBody.innerHTML = "";
+
+  groups.forEach((group) => {
+    const isOpen = openGroupKeys.has(group.name);
+
+    const groupTr = document.createElement("tr");
+    groupTr.className = "group-row" + (isOpen ? " expanded" : "");
+    groupTr.innerHTML = `
+      <td><span class="group-caret">▶</span></td>
+      <td>${escapeHtml(group.name)}</td>
+      <td>${group.count}<span class="group-count-badge">${group.count} unit</span></td>
+      <td>${escapeHtml(group.regRange)}</td>
+      <td class="muted small">Klik baris untuk lihat detail</td>
+    `;
+
+    const childTr = document.createElement("tr");
+    childTr.className = "group-children-row" + (isOpen ? " open" : "");
+    const childTd = document.createElement("td");
+    childTd.colSpan = 5;
+    childTd.className = "child-cell";
+
+    const childTable = document.createElement("table");
+    childTable.innerHTML = `<thead><tr>${displayFields
+      .map((f) => `<th>${f.label}</th>`)
+      .join("")}<th>Aksi</th></tr></thead><tbody></tbody>`;
+    const childBody = childTable.querySelector("tbody");
+
+    group.items.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        displayFields.map((f) => `<td>${escapeHtml(row[f.key] ?? "-")}</td>`).join("") +
+        `<td class="actions-cell">
+           <button class="link-btn" data-action="edit">Edit</button>
+           <button class="link-btn danger" data-action="delete">Hapus</button>
+           <button class="link-btn" data-action="pdf">PDF</button>
+         </td>`;
+      tr.querySelector('[data-action="edit"]').addEventListener("click", () => openFormModal(row));
+      tr.querySelector('[data-action="delete"]').addEventListener("click", () => openConfirmModal(row));
+      tr.querySelector('[data-action="pdf"]').addEventListener("click", () => exportSingleRecordPdf(schema, row));
+      childBody.appendChild(tr);
+    });
+
+    childTd.appendChild(childTable);
+    childTr.appendChild(childTd);
+
+    groupTr.addEventListener("click", () => {
+      if (openGroupKeys.has(group.name)) {
+        openGroupKeys.delete(group.name);
+        groupTr.classList.remove("expanded");
+        childTr.classList.remove("open");
+      } else {
+        openGroupKeys.add(group.name);
+        groupTr.classList.add("expanded");
+        childTr.classList.add("open");
+      }
+    });
+
+    tableBody.appendChild(groupTr);
+    tableBody.appendChild(childTr);
+  });
 }
 
 // ================= ADD / EDIT MODAL =================
@@ -276,12 +436,44 @@ function openFormModal(record) {
     formGrid.appendChild(wrap);
   });
 
+  // Otomatisasi No. Register hanya berlaku saat menambah data baru, bukan saat edit
+  batchQtyInput.value = "1";
+  batchSection.style.display = isEdit ? "none" : "block";
+
   formModalOverlay.style.display = "flex";
 }
 
 function closeFormModal() {
   formModalOverlay.style.display = "none";
   editingRow = null;
+}
+
+// Menghasilkan No. Register berurutan otomatis sebanyak `qty`, dimulai dari
+// angka yang terkandung pada `startReg` (mis. "001" -> 001..010). Prefix/teks
+// non-angka pada startReg tetap dipertahankan (mis. "REG-001" -> REG-002, ...),
+// dan lebar padding angka mengikuti panjang digit pada startReg (minimal 3).
+function generateSequentialRegisters(startReg, qty) {
+  const raw = (startReg ?? "").toString().trim();
+  const match = raw.match(/^(.*?)(\d+)(\D*)$/);
+  let prefix = "";
+  let suffix = "";
+  let width = 3;
+  let start = 1;
+  if (match) {
+    prefix = match[1];
+    suffix = match[3];
+    width = Math.max(match[2].length, 3);
+    start = parseInt(match[2], 10);
+  } else if (raw) {
+    // tidak ada angka sama sekali, pakai teks apa adanya sebagai prefix
+    prefix = raw + "-";
+  }
+  const results = [];
+  for (let i = 0; i < qty; i += 1) {
+    const num = String(start + i).padStart(width, "0");
+    results.push(`${prefix}${num}${suffix}`);
+  }
+  return results;
 }
 
 assetForm.addEventListener("submit", async (e) => {
@@ -296,12 +488,21 @@ assetForm.addEventListener("submit", async (e) => {
     payload[f.key] = val;
   });
 
+  const isEdit = Boolean(editingRow && editingRow.id);
+  const batchQty = isEdit ? 1 : Math.max(1, parseInt(batchQtyInput.value, 10) || 1);
+
   formSaveBtn.disabled = true;
   formSaveBtn.textContent = "Menyimpan…";
 
   let error;
-  if (editingRow && editingRow.id) {
+  if (isEdit) {
     ({ error } = await supabase.from(schema.table).update(payload).eq("id", editingRow.id));
+  } else if (batchQty > 1) {
+    // Buat beberapa unit sekaligus dengan data sama, No. Register berurutan otomatis,
+    // dan otomatis mengelompok (grup ditentukan dari nama_barang yang sama).
+    const registers = generateSequentialRegisters(payload.nomor_register, batchQty);
+    const rows = registers.map((reg) => ({ ...payload, nomor_register: reg }));
+    ({ error } = await supabase.from(schema.table).insert(rows));
   } else {
     ({ error } = await supabase.from(schema.table).insert(payload));
   }
