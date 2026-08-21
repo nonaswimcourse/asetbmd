@@ -819,24 +819,61 @@ async function fetchImageAsDataUrl(url) {
   }
 }
 
+// Mengambil "tahun" otomatis dari data satu baris, sesuai `schema.yearField`
+// (mis. tahun_pengadaan untuk KIB A/D, tahun_pembelian untuk KIB B, tahun
+// untuk KIB E). Untuk KIB C yang cuma punya tanggal dokumen, cukup ambil
+// 4 digit tahun dari tanggal itu (mis. "2024-05-01" -> "2024").
+function getRecordYear(schema, row) {
+  const field = schema.yearField;
+  if (!field) return "";
+  const raw = row[field];
+  if (raw === null || raw === undefined || raw === "") return "";
+  const match = String(raw).match(/\d{4}/);
+  return match ? match[0] : String(raw);
+}
+
+// Membuat judul PDF baku: "INVENTARIS BMD KAB.BREBES KIB <huruf> <unit kerja> TAHUN <tahun>",
+// mis. "INVENTARIS BMD KAB.BREBES KIB E SDN TANJUNG 03 TAHUN 2025". Unit
+// kerja & tahun diambil otomatis dari data baris (untuk PDF grup, `row` sudah
+// mewakili unit pertama dalam grup itu).
+function buildPdfTitle(schema, row) {
+  const unit = (row.unit_kerja || "").toString().trim().toUpperCase();
+  const year = getRecordYear(schema, row);
+  let title = `INVENTARIS BMD KAB.BREBES KIB ${schema.key}`;
+  if (unit) title += ` ${unit}`;
+  if (year) title += ` TAHUN ${year}`;
+  return title;
+}
+
 // Membuat PDF 1 halaman bergaya "Kartu Inventaris": tabel Field/Nilai di kiri,
 // foto di kanan. Dipakai baik untuk PDF 1 data (per unit) maupun PDF Rangkuman
-// grup — untuk grup, `row.nomor_register` sudah berisi rentang (mis. "000013 – 000028")
-// dan `subtitle` menambahkan info jumlah unit di bawah judul.
+// grup — untuk grup, `row.nomor_register` & `row.id_pemda` sudah berisi rentang
+// (mis. "000013 – 000028") dan `subtitle` menambahkan info jumlah unit di
+// bawah judul. Judul PDF dibuat otomatis lewat buildPdfTitle().
 async function buildRecordPdf(schema, row, { subtitle, filename } = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-  doc.setFontSize(14);
-  doc.text(schema.title, 40, 40);
-  doc.setFontSize(10);
-  doc.text(schema.description, 40, 58);
-  let startY = 80;
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  const pdfTitle = buildPdfTitle(schema, row);
+  doc.setFontSize(12);
+  const titleLines = doc.splitTextToSize(pdfTitle, pageWidth - 80);
+  doc.text(titleLines, 40, 40);
+  let y = 40 + titleLines.length * 14;
+
+  doc.setFontSize(9);
+  doc.setTextColor(90, 90, 90);
+  doc.text(schema.description, 40, y + 4);
+  doc.setTextColor(0, 0, 0);
+  y += 18;
+
+  let startY = y + 14;
   if (subtitle) {
     doc.setFontSize(9);
     doc.setTextColor(30, 64, 175);
-    doc.text(subtitle, 40, 74);
+    doc.text(subtitle, 40, y + 12);
     doc.setTextColor(0, 0, 0);
-    startY = 92;
+    startY = y + 26;
   }
 
   const imageField = schema.fields.find((f) => f.type === "image");
@@ -874,12 +911,13 @@ async function exportSingleRecordPdf(schema, row) {
 
 // PDF Rangkuman grup: 1 halaman yang mewakili seluruh unit dalam grup (data
 // diambil dari unit pertama, karena field-nya sama persis untuk semua unit),
-// dengan Nomor Register otomatis ditampilkan sebagai rentang (mis. "000013 – 000028").
+// dengan Nomor Register DAN ID Pemda otomatis ditampilkan sebagai rentang
+// (mis. "000013 – 000028"), bukan cuma nilai unit pertama saja.
 async function exportGroupPdf(schema, group) {
-  const row = { ...group.items[0], nomor_register: group.regRange };
+  const row = { ...group.items[0], nomor_register: group.regRange, id_pemda: group.idPemdaRange };
   const safeName = String(group.name).replace(/[^a-z0-9]+/gi, "_").toLowerCase();
   await buildRecordPdf(schema, row, {
-    subtitle: `Rangkuman grup • ${group.count} unit • No. Register ${group.regRange}`,
+    subtitle: `Rangkuman grup • ${group.count} unit • No. Register ${group.regRange} • ID Pemda ${group.idPemdaRange}`,
     filename: `${schema.table}_rangkuman_${safeName}.pdf`,
   });
 }

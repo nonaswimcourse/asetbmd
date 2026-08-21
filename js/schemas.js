@@ -43,6 +43,8 @@ export const KIB_SCHEMAS = {
     table: "aset_kib_a",
     title: "KIB A - Tanah",
     description: "Kartu Inventaris Barang A: Tanah",
+    // Field yang dipakai sebagai "TAHUN" otomatis di judul PDF
+    yearField: "tahun_pengadaan",
     fields: [
       ...baseIdentity,
       { key: "luas_m2", label: "Luas (m²)", type: "number" },
@@ -60,6 +62,7 @@ export const KIB_SCHEMAS = {
     table: "aset_kib_b",
     title: "KIB B - Peralatan dan Mesin",
     description: "Kartu Inventaris Barang B: Peralatan dan Mesin",
+    yearField: "tahun_pembelian",
     fields: [
       ...baseIdentity,
       { key: "merk_type", label: "Merk / Tipe", type: "text" },
@@ -79,6 +82,9 @@ export const KIB_SCHEMAS = {
     table: "aset_kib_c",
     title: "KIB C - Gedung dan Bangunan",
     description: "Kartu Inventaris Barang C: Gedung dan Bangunan",
+    // Tidak ada kolom "tahun" tersendiri di KIB C, jadi tahun diambil dari
+    // tanggal dokumen (mis. "2024-05-01" -> "2024").
+    yearField: "tanggal_dokumen",
     fields: [
       ...baseIdentity,
       { key: "kondisi_bangunan", label: "Kondisi Bangunan", type: "select", options: KONDISI_OPTIONS },
@@ -98,6 +104,7 @@ export const KIB_SCHEMAS = {
     table: "aset_kib_d",
     title: "KIB D - Jalan, Irigasi, dan Jaringan",
     description: "Kartu Inventaris Barang D: Jalan, Irigasi, dan Jaringan",
+    yearField: "tahun_pengadaan",
     fields: [
       ...baseIdentity,
       { key: "kondisi", label: "Kondisi", type: "select", options: KONDISI_OPTIONS },
@@ -117,6 +124,7 @@ export const KIB_SCHEMAS = {
     table: "aset_kib_e",
     title: "KIB E - Aset Tetap Lainnya",
     description: "Buku/Perpustakaan, Barang Bercorak Kesenian/Kebudayaan, Hewan/Ternak dan Tumbuhan",
+    yearField: "tahun",
     // Kolom yang ditampilkan di tabel depan (urut sesuai kebutuhan: jenis buku,
     // judul buku, harga, tahun), berbeda dari KIB A-D yang memakai 7 field identitas.
     displayFields: [
