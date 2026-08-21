@@ -960,12 +960,9 @@ async function buildRecordPdf(schema, row, { filename, noUrut } = {}) {
     }
   }
 
-  // "No" (No urut) ditambahkan sebagai baris pertama tabel Field/Nilai, sama
-  // seperti No urut yang tampil di tabel utama — supaya PDF ikut memuatnya.
-  const body = [
-    ...(noUrut ? [["No", String(noUrut)]] : []),
-    ...schema.fields.filter((f) => f.type !== "image").map((f) => [f.label, (row[f.key] ?? "").toString()]),
-  ];
+  const body = schema.fields
+    .filter((f) => f.type !== "image")
+    .map((f) => [f.label, (row[f.key] ?? "").toString()]);
 
   doc.autoTable({
     startY,
