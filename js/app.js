@@ -317,6 +317,21 @@ function escapeHtml(str) {
 // menampilkan ringkasan (jumlah unit + rentang No. Register), dan bisa
 // di-expand untuk melihat & mengelola tiap unit satu per satu.
 
+// Mengambil nilai non-kosong dari sebuah field pada seluruh item, diurutkan
+// secara numerik-aware (supaya "9" < "10", bukan diurutkan sebagai teks biasa).
+function sortedFieldValues(items, key) {
+  return items
+    .map((r) => r[key])
+    .filter((v) => v !== null && v !== undefined && String(v).trim() !== "")
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+}
+
+function rangeLabel(sorted) {
+  if (sorted.length === 0) return "-";
+  if (sorted.length === 1) return sorted[0];
+  return `${sorted[0]} – ${sorted[sorted.length - 1]}`;
+}
+
 function groupRowsByName(rows) {
   const map = new Map();
   rows.forEach((row) => {
@@ -325,17 +340,17 @@ function groupRowsByName(rows) {
     map.get(key).push(row);
   });
   return Array.from(map.entries()).map(([name, items]) => {
-    const regs = items
-      .map((r) => r.nomor_register)
-      .filter((v) => v !== null && v !== undefined && String(v).trim() !== "");
-    let regRange = "-";
-    if (regs.length === 1) {
-      regRange = regs[0];
-    } else if (regs.length > 1) {
-      const sorted = [...regs].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
-      regRange = `${sorted[0]} – ${sorted[sorted.length - 1]}`;
-    }
-    return { name, items, count: items.length, regRange };
+    const sortedRegs = sortedFieldValues(items, "nomor_register");
+    const sortedIdPemda = sortedFieldValues(items, "id_pemda");
+    return {
+      name,
+      items,
+      count: items.length,
+      regRange: rangeLabel(sortedRegs),
+      regStart: sortedRegs[0] || "",
+      idPemdaRange: rangeLabel(sortedIdPemda),
+      idPemdaStart: sortedIdPemda[0] || "",
+    };
   });
 }
 
@@ -539,13 +554,23 @@ function openFormModal(record, opts = {}) {
     input.value = record[f.key] ?? "";
     if (f.required) input.required = true;
 
-    // Saat edit grup: No. Register beda-beda per unit, jadi field ini dikunci
-    // (tidak ikut diubah massal) supaya tidak menimpa nomor tiap unit.
-    if (isGroupEdit && f.key === "nomor_register") {
-      input.readOnly = true;
-      input.value = record.regRangeLabel || input.value;
-      input.title = "Nomor Register berbeda per unit — tidak diubah lewat edit grup.";
-      wrap.classList.add("locked");
+    // Saat edit grup: No. Register & ID Pemda berbeda per unit. Field ini TIDAK
+    // dikunci — nilai yang diisi di sini dipakai sebagai nilai AWAL, lalu saat
+    // disimpan setiap unit dalam grup otomatis mendapat nilai berurutan
+    // (unit 1 = nilai awal, unit 2 = nilai berikutnya, dst).
+    if (isGroupEdit && (f.key === "nomor_register" || f.key === "id_pemda")) {
+      wrap.classList.add("group-sequential");
+      const rangeText = f.key === "nomor_register" ? record.regRangeLabel : record.idPemdaRangeLabel;
+      input.title =
+        `Rentang saat ini: ${rangeText || "-"}. Nilai di sini dipakai sebagai nilai AWAL — ` +
+        `akan diisi otomatis berurutan ke seluruh ${editingGroupIds ? editingGroupIds.length : 0} unit dalam grup ini.`;
+      wrap.appendChild(input);
+      const hint = document.createElement("div");
+      hint.className = "field-hint";
+      hint.textContent = `Rentang saat ini: ${rangeText || "-"} • nilai awal, diisi berurutan otomatis ke seluruh grup`;
+      wrap.appendChild(hint);
+      formGrid.appendChild(wrap);
+      return;
     }
 
     wrap.appendChild(input);
@@ -560,10 +585,18 @@ function openFormModal(record, opts = {}) {
 }
 
 // Membuka form edit untuk SATU grup sekaligus: prefill dari data unit
-// pertama, No. Register dikunci (menampilkan rentangnya), dan saat disimpan
-// perubahan diterapkan ke SEMUA unit dalam grup itu (lihat submit handler).
+// pertama. Nomor Register & ID Pemda diisi dengan nilai AWAL grup (bukan
+// dikunci) — kalau diubah/disimpan, keduanya otomatis dibuat berurutan untuk
+// SEMUA unit dalam grup itu (unit ke-1 dapat nilai awal, unit ke-2 nilai
+// berikutnya, dst — lihat submit handler & generateSequentialRegisters).
 function openGroupEditModal(schema, group) {
-  const sample = { ...group.items[0], regRangeLabel: group.regRange };
+  const sample = {
+    ...group.items[0],
+    nomor_register: group.regStart || group.items[0].nomor_register || "",
+    id_pemda: group.idPemdaStart || group.items[0].id_pemda || "",
+    regRangeLabel: group.regRange,
+    idPemdaRangeLabel: group.idPemdaRange,
+  };
   const ids = group.items.map((r) => r.id);
   openFormModal(sample, { groupIds: ids });
 }
@@ -638,10 +671,32 @@ assetForm.addEventListener("submit", async (e) => {
 
   let error;
   if (isGroupEdit) {
-    // Edit massal: No. Register tiap unit tetap masing-masing, field lain
-    // (termasuk foto) diterapkan ke semua unit dalam grup ini sekaligus.
+    // Edit grup: field biasa (termasuk foto) diterapkan sama ke semua unit.
+    // No. Register & ID Pemda diperlakukan khusus — nilai yang diisi di form
+    // dipakai sebagai nilai AWAL, lalu dibuat berurutan otomatis untuk tiap
+    // unit dalam grup (unit ke-1 = nilai awal, unit ke-2 = nilai berikutnya,
+    // dst), jadi tiap unit tetap punya No. Register & ID Pemda yang berbeda.
+    const qty = editingGroupIds.length;
+    const startReg = payload.nomor_register;
+    const startIdPemda = payload.id_pemda;
+    const newRegs = startReg ? generateSequentialRegisters(startReg, qty) : null;
+    const newIdPemda = startIdPemda ? generateSequentialRegisters(startIdPemda, qty) : null;
     delete payload.nomor_register;
-    ({ error } = await supabase.from(schema.table).update(payload).in("id", editingGroupIds));
+    delete payload.id_pemda;
+
+    for (let i = 0; i < editingGroupIds.length; i += 1) {
+      const rowPayload = { ...payload };
+      if (newRegs) rowPayload.nomor_register = newRegs[i];
+      if (newIdPemda) rowPayload.id_pemda = newIdPemda[i];
+      const { error: rowError } = await supabase
+        .from(schema.table)
+        .update(rowPayload)
+        .eq("id", editingGroupIds[i]);
+      if (rowError) {
+        error = rowError;
+        break;
+      }
+    }
   } else if (isEdit) {
     ({ error } = await supabase.from(schema.table).update(payload).eq("id", editingRow.id));
   } else if (batchQty > 1) {
