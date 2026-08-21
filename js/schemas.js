@@ -3,6 +3,21 @@
 export const KONDISI_OPTIONS = ["Baik", "Rusak Ringan", "Rusak Berat"];
 export const ASAL_USUL_OPTIONS = ["Pembelian", "Bantuan", "Hibah", "Rampasan", "Sitaan", "Lain-lain"];
 export const INTRA_EKSTRA_OPTIONS = ["Intra", "Ekstra"];
+export const JENIS_KOLEKSI_E_OPTIONS = [
+  "Buku / Perpustakaan",
+  "Barang Bercorak Kesenian/Kebudayaan",
+  "Hewan / Ternak",
+  "Tumbuhan",
+];
+export const JENIS_BUKU_OPTIONS = [
+  "Buku Pelajaran / Modul",
+  "Buku Referensi / Ensiklopedia",
+  "Buku Fiksi",
+  "Buku Non-Fiksi",
+  "Majalah / Jurnal",
+  "Peta / Atlas",
+  "Lainnya",
+];
 
 const baseIdentity = [
   { key: "id_pemda", label: "ID Pemda", type: "text" },
@@ -102,14 +117,34 @@ export const KIB_SCHEMAS = {
     table: "aset_kib_e",
     title: "KIB E - Aset Tetap Lainnya",
     description: "Buku/Perpustakaan, Barang Bercorak Kesenian/Kebudayaan, Hewan/Ternak dan Tumbuhan",
+    // Kolom yang ditampilkan di tabel depan (urut sesuai kebutuhan: jenis buku,
+    // judul buku, harga, tahun), berbeda dari KIB A-D yang memakai 7 field identitas.
+    displayFields: [
+      "foto_url",
+      "nomor_register",
+      "nama_barang",
+      "jenis_koleksi",
+      "jenis_buku",
+      "judul_buku",
+      "harga",
+      "tahun",
+      "kondisi",
+    ],
+    searchFields: ["nama_barang", "judul_buku", "jenis_buku", "pengarang", "nomor_register"],
     fields: [
       ...baseIdentity,
-      { key: "judul_pencipta", label: "Judul / Pencipta (Buku)", type: "text" },
+      { key: "jenis_koleksi", label: "Jenis Koleksi", type: "select", options: JENIS_KOLEKSI_E_OPTIONS, required: true },
+      { key: "jenis_buku", label: "Jenis Buku", type: "select", options: JENIS_BUKU_OPTIONS },
+      { key: "judul_buku", label: "Judul Buku", type: "text" },
+      { key: "foto_url", label: "Foto Buku", type: "image" },
+      { key: "pengarang", label: "Pengarang / Penulis", type: "text" },
+      { key: "penerbit", label: "Penerbit", type: "text" },
+      { key: "isbn", label: "ISBN", type: "text" },
       { key: "spesifikasi", label: "Spesifikasi", type: "text" },
       { key: "asal_daerah", label: "Asal Daerah (Kesenian)", type: "text" },
       { key: "pencipta", label: "Pencipta (Kesenian)", type: "text" },
       { key: "bahan", label: "Bahan (Hewan/Tumbuhan)", type: "text" },
-      { key: "jenis", label: "Jenis (Hewan/Tumbuhan)", type: "text" },
+      { key: "jenis_hewan_tumbuhan", label: "Jenis (Hewan/Tumbuhan)", type: "text" },
       { key: "ukuran", label: "Ukuran", type: "text" },
       { key: "jumlah", label: "Jumlah", type: "number" },
       { key: "tahun", label: "Tahun Cetak/Pembelian", type: "number" },

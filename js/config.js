@@ -2,3 +2,7 @@
 // Ambil dari: Supabase Dashboard > Project Settings > API
 export const SUPABASE_URL = "https://tkpmikojcuqjkvqkhisz.supabase.co";
 export const SUPABASE_ANON_KEY = "sb_publishable_UCyA3iBjDS0IBHR_M0ZY0A_oneM_MOo";
+
+// Nama bucket Supabase Storage tempat menyimpan foto (buku, aset, dll).
+// Buat bucket ini di Supabase Dashboard > Storage, set sebagai "Public bucket".
+export const PHOTO_BUCKET = "aset-foto";

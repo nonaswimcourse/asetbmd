@@ -1,10 +1,14 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, PHOTO_BUCKET } from "./config.js";
 import { KIB_SCHEMAS, KIB_LIST, emptyRecord } from "./schemas.js";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const PAGE_SIZE = 15;
+
+// Menyimpan File foto yang baru dipilih tapi belum diunggah, per field key,
+// selama modal tambah/edit terbuka. Direset tiap modal dibuka/ditutup.
+let pendingPhotoFiles = {};
 
 // ---------- state ----------
 let activeKibKey = "A";
@@ -130,10 +134,23 @@ function buildSidebar() {
 // ================= DATA LOADING =================
 
 function searchableColumns(schema) {
+  if (schema.searchFields) return schema.searchFields;
   return schema.fields
     .filter((f) => f.type === "text")
     .slice(0, 4)
     .map((f) => f.key);
+}
+
+// Mengembalikan daftar field yang dipakai sebagai kolom tabel depan.
+// Kalau skema mendefinisikan `displayFields` (daftar key), pakai itu;
+// kalau tidak, jatuh ke default: 7 field pertama pada skema.
+function getDisplayFields(schema) {
+  if (schema.displayFields) {
+    return schema.displayFields
+      .map((key) => schema.fields.find((f) => f.key === key))
+      .filter(Boolean);
+  }
+  return schema.fields.slice(0, 7);
 }
 
 async function loadData() {
@@ -247,7 +264,7 @@ searchInput.addEventListener("input", (e) => {
 // ================= TABLE RENDER =================
 
 function renderTable(schema, rows) {
-  const displayFields = schema.fields.slice(0, 7);
+  const displayFields = getDisplayFields(schema);
 
   tableHeadRow.innerHTML =
     displayFields.map((f) => `<th>${f.label}</th>`).join("") + `<th>Aksi</th>`;
@@ -263,7 +280,7 @@ function renderTable(schema, rows) {
   rows.forEach((row) => {
     const tr = document.createElement("tr");
     tr.innerHTML =
-      displayFields.map((f) => `<td>${escapeHtml(row[f.key] ?? "-")}</td>`).join("") +
+      displayFields.map((f) => `<td>${renderCell(f, row)}</td>`).join("") +
       `<td class="actions-cell">
          <button class="link-btn" data-action="edit">Edit</button>
          <button class="link-btn danger" data-action="delete">Hapus</button>
@@ -276,6 +293,18 @@ function renderTable(schema, rows) {
 
     tableBody.appendChild(tr);
   });
+}
+
+// Merender satu sel tabel sesuai tipe field: thumbnail untuk "image",
+// teks biasa (di-escape) untuk tipe lainnya.
+function renderCell(f, row) {
+  if (f.type === "image") {
+    const url = row[f.key];
+    return url
+      ? `<img src="${escapeHtml(url)}" alt="foto" class="table-thumb" />`
+      : `<span class="muted">-</span>`;
+  }
+  return escapeHtml(row[f.key] ?? "-");
 }
 
 function escapeHtml(str) {
@@ -312,7 +341,7 @@ function groupRowsByName(rows) {
 }
 
 function renderGroupedTable(schema, rows) {
-  const displayFields = schema.fields.slice(0, 7);
+  const displayFields = getDisplayFields(schema);
 
   tableHeadRow.innerHTML =
     `<th style="width:2rem"></th><th>Nama Barang</th><th>Jumlah Unit</th><th>Rentang No. Register</th><th>Aksi</th>`;
@@ -361,7 +390,7 @@ function renderGroupedTable(schema, rows) {
     group.items.forEach((row) => {
       const tr = document.createElement("tr");
       tr.innerHTML =
-        displayFields.map((f) => `<td>${escapeHtml(row[f.key] ?? "-")}</td>`).join("") +
+        displayFields.map((f) => `<td>${renderCell(f, row)}</td>`).join("") +
         `<td class="actions-cell">
            <button class="link-btn" data-action="edit">Edit</button>
            <button class="link-btn danger" data-action="delete">Hapus</button>
@@ -393,6 +422,97 @@ function renderGroupedTable(schema, rows) {
   });
 }
 
+// ================= FOTO (SUPABASE STORAGE) =================
+
+// Membuat blok form untuk field bertipe "image": tombol pilih file, pratinjau
+// foto, tombol hapus foto. URL foto tersimpan disimpan pada hidden input
+// bernama f.key supaya ikut terbaca lewat FormData seperti field lain; kalau
+// user memilih file baru, file mentahnya disimpan di `pendingPhotoFiles` dan
+// baru diunggah ke Supabase Storage saat form disubmit.
+function buildImageField(f, record) {
+  const wrap = document.createElement("div");
+  wrap.className = "form-field full image-field";
+
+  const label = document.createElement("label");
+  label.innerHTML = f.label + (f.required ? '<span class="req">*</span>' : "");
+  wrap.appendChild(label);
+
+  const currentUrl = record[f.key] || "";
+
+  const hidden = document.createElement("input");
+  hidden.type = "hidden";
+  hidden.name = f.key;
+  hidden.value = currentUrl;
+  wrap.appendChild(hidden);
+
+  const row = document.createElement("div");
+  row.className = "image-field-row";
+
+  const preview = document.createElement("img");
+  preview.className = "image-preview";
+  preview.src = currentUrl || "";
+  preview.style.display = currentUrl ? "block" : "none";
+  preview.alt = f.label;
+
+  const controls = document.createElement("div");
+  controls.className = "image-field-controls";
+
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "image/*";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "btn-secondary small";
+  removeBtn.textContent = "Hapus Foto";
+  removeBtn.style.display = currentUrl ? "inline-block" : "none";
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    pendingPhotoFiles[f.key] = file;
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = "block";
+    removeBtn.style.display = "inline-block";
+  });
+
+  removeBtn.addEventListener("click", () => {
+    delete pendingPhotoFiles[f.key];
+    hidden.value = "";
+    fileInput.value = "";
+    preview.src = "";
+    preview.style.display = "none";
+    removeBtn.style.display = "none";
+  });
+
+  controls.appendChild(fileInput);
+  controls.appendChild(removeBtn);
+  row.appendChild(preview);
+  row.appendChild(controls);
+  wrap.appendChild(row);
+
+  return wrap;
+}
+
+// Mengunggah semua foto yang baru dipilih (di `pendingPhotoFiles`) ke Supabase
+// Storage, lalu mengembalikan object { key: publicUrl } untuk ditimpakan ke payload.
+async function uploadPendingPhotos() {
+  const result = {};
+  const entries = Object.entries(pendingPhotoFiles);
+  for (const [key, file] of entries) {
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+    if (error) throw new Error(`Gagal unggah foto: ${error.message}`);
+    const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+    result[key] = data.publicUrl;
+  }
+  return result;
+}
+
 // ================= ADD / EDIT MODAL =================
 
 addBtn.addEventListener("click", () => openFormModal(emptyRecord(currentSchema())));
@@ -407,9 +527,15 @@ function openFormModal(record) {
   const schema = currentSchema();
   const isEdit = Boolean(record.id);
   formModalTitle.textContent = isEdit ? "Edit Data Aset" : "Tambah Data Aset";
+  pendingPhotoFiles = {};
 
   formGrid.innerHTML = "";
   schema.fields.forEach((f) => {
+    if (f.type === "image") {
+      formGrid.appendChild(buildImageField(f, record));
+      return;
+    }
+
     const wrap = document.createElement("div");
     wrap.className = "form-field" + (f.type === "textarea" ? " full" : "");
 
@@ -454,6 +580,7 @@ function openFormModal(record) {
 function closeFormModal() {
   formModalOverlay.style.display = "none";
   editingRow = null;
+  pendingPhotoFiles = {};
 }
 
 // Menghasilkan No. Register berurutan otomatis sebanyak `qty`, dimulai dari
@@ -487,6 +614,20 @@ function generateSequentialRegisters(startReg, qty) {
 assetForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const schema = currentSchema();
+
+  formSaveBtn.disabled = true;
+  formSaveBtn.textContent = "Mengunggah foto…";
+
+  let uploadedUrls;
+  try {
+    uploadedUrls = await uploadPendingPhotos();
+  } catch (err) {
+    formSaveBtn.disabled = false;
+    formSaveBtn.textContent = "Simpan";
+    alert(err.message);
+    return;
+  }
+
   const formData = new FormData(assetForm);
   const payload = {};
   schema.fields.forEach((f) => {
@@ -495,11 +636,11 @@ assetForm.addEventListener("submit", async (e) => {
     if (f.type === "number" && val !== null) val = Number(val);
     payload[f.key] = val;
   });
+  Object.assign(payload, uploadedUrls);
 
   const isEdit = Boolean(editingRow && editingRow.id);
   const batchQty = isEdit ? 1 : Math.max(1, parseInt(batchQtyInput.value, 10) || 1);
 
-  formSaveBtn.disabled = true;
   formSaveBtn.textContent = "Menyimpan…";
 
   let error;
@@ -617,8 +758,12 @@ function exportGroupPdf(schema, group) {
   doc.text(`Kelompok: ${group.name}  •  ${group.count} unit  •  No. Register ${group.regRange}`, 40, 45);
 
   const headers = schema.fields.map((f) => f.label);
-  const keys = schema.fields.map((f) => f.key);
-  const body = group.items.map((row) => keys.map((k) => (row[k] ?? "").toString()));
+  const body = group.items.map((row) =>
+    schema.fields.map((f) => {
+      if (f.type === "image") return row[f.key] ? "(ada foto)" : "-";
+      return (row[f.key] ?? "").toString();
+    })
+  );
 
   doc.autoTable({
     startY: 60,
@@ -634,7 +779,27 @@ function exportGroupPdf(schema, group) {
   doc.save(`${schema.table}_${safeName}.pdf`);
 }
 
-function exportSingleRecordPdf(schema, row) {
+// Mengambil gambar dari URL publik Supabase Storage dan mengubahnya menjadi
+// data URL base64 supaya bisa disisipkan ke PDF via jsPDF.addImage. Kalau
+// gagal (mis. offline / CORS), kembalikan null dan PDF tetap dibuat tanpa foto.
+async function fetchImageAsDataUrl(url) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const format = blob.type.includes("png") ? "PNG" : "JPEG";
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    return { dataUrl, format };
+  } catch {
+    return null;
+  }
+}
+
+async function exportSingleRecordPdf(schema, row) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   doc.setFontSize(14);
@@ -642,15 +807,31 @@ function exportSingleRecordPdf(schema, row) {
   doc.setFontSize(10);
   doc.text(schema.description, 40, 58);
 
-  const body = schema.fields.map((f) => [f.label, (row[f.key] ?? "").toString()]);
+  const imageField = schema.fields.find((f) => f.type === "image");
+  let startY = 80;
+
+  if (imageField && row[imageField.key]) {
+    const img = await fetchImageAsDataUrl(row[imageField.key]);
+    if (img) {
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const imgWidth = 140;
+      const imgHeight = 180;
+      doc.addImage(img.dataUrl, img.format, pageWidth - 40 - imgWidth, 75, imgWidth, imgHeight);
+    }
+  }
+
+  const body = schema.fields
+    .filter((f) => f.type !== "image")
+    .map((f) => [f.label, (row[f.key] ?? "").toString()]);
 
   doc.autoTable({
-    startY: 80,
+    startY,
     head: [["Field", "Nilai"]],
     body,
     styles: { fontSize: 10, cellPadding: 5 },
     headStyles: { fillColor: [30, 64, 175] },
-    columnStyles: { 0: { fontStyle: "bold", cellWidth: 180 } },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 150 } },
+    tableWidth: 300,
     theme: "grid",
   });
 
