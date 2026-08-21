@@ -1,5 +1,6 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY, PHOTO_BUCKET } from "./config.js";
 import { KIB_SCHEMAS, KIB_LIST, emptyRecord } from "./schemas.js";
+import { BREBES_LOGO_DATA_URL } from "./logo.js";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -777,17 +778,21 @@ function exportTablePdf(schema, rows) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-  doc.setFontSize(12);
-  doc.text(schema.title, 40, 30);
+  // Export tabel penuh bisa berisi banyak unit kerja/tahun berbeda, jadi kop
+  // di sini memakai baris kosong ({}) — baris 2 judul cukup "KIB <huruf>"
+  // tanpa nama unit kerja / tahun tertentu.
+  const y = drawPdfLetterhead(doc, schema, {});
   doc.setFontSize(9);
-  doc.text(schema.description, 40, 45);
+  doc.setTextColor(90, 90, 90);
+  doc.text(schema.description, 40, y);
+  doc.setTextColor(0, 0, 0);
 
   const headers = schema.fields.map((f) => f.label);
   const keys = schema.fields.map((f) => f.key);
   const body = rows.map((row) => keys.map((k) => (row[k] ?? "").toString()));
 
   doc.autoTable({
-    startY: 60,
+    startY: y + 12,
     head: [headers],
     body,
     styles: { fontSize: 7, cellPadding: 3 },
@@ -832,48 +837,74 @@ function getRecordYear(schema, row) {
   return match ? match[0] : String(raw);
 }
 
-// Membuat judul PDF baku: "INVENTARIS BMD KAB.BREBES KIB <huruf> <unit kerja> TAHUN <tahun>",
-// mis. "INVENTARIS BMD KAB.BREBES KIB E SDN TANJUNG 03 TAHUN 2025". Unit
-// kerja & tahun diambil otomatis dari data baris (untuk PDF grup, `row` sudah
-// mewakili unit pertama dalam grup itu).
-function buildPdfTitle(schema, row) {
+// Menggambar kop PDF (letterhead): logo Kabupaten Brebes di kiri, dan judul
+// 2 baris di kanannya — baris 1 "INVENTARIS BMD KAB.BREBES" tetap, baris 2
+// "KIB <huruf> <UNIT KERJA> TAHUN <tahun>" dibuat otomatis dari data baris
+// (unit kerja & tahun). Sama seperti contoh kop yang diberikan user. `row`
+// boleh objek kosong ({}) untuk PDF yang tidak mewakili satu unit tertentu
+// (mis. export tabel penuh) — baris 2 lalu cuma jadi "KIB <huruf>".
+// Mengembalikan koordinat Y tempat konten berikutnya boleh mulai digambar.
+function drawPdfLetterhead(doc, schema, row) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const logoX = 40;
+  const logoY = 22;
+  const logoW = 46;
+  const logoH = 44;
+
+  try {
+    doc.addImage(BREBES_LOGO_DATA_URL, "PNG", logoX, logoY, logoW, logoH);
+  } catch {
+    // kalau logo gagal digambar (mis. format tidak didukung), PDF tetap dibuat tanpa logo
+  }
+
   const unit = (row.unit_kerja || "").toString().trim().toUpperCase();
   const year = getRecordYear(schema, row);
-  let title = `INVENTARIS BMD KAB.BREBES KIB ${schema.key}`;
-  if (unit) title += ` ${unit}`;
-  if (year) title += ` TAHUN ${year}`;
-  return title;
+  let line2 = `KIB ${schema.key}`;
+  if (unit) line2 += ` ${unit}`;
+  if (year) line2 += ` TAHUN ${year}`;
+
+  const textX = logoX + logoW + 16;
+  const maxTextWidth = pageWidth - textX - 40;
+
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(13);
+  const line1Wrapped = doc.splitTextToSize("INVENTARIS BMD KAB.BREBES", maxTextWidth);
+  const line2Wrapped = doc.splitTextToSize(line2, maxTextWidth);
+
+  let y = logoY + 16;
+  doc.text(line1Wrapped, textX, y);
+  y += line1Wrapped.length * 16 + 6;
+  doc.text(line2Wrapped, textX, y);
+  y += line2Wrapped.length * 16;
+  doc.setFont(undefined, "normal");
+
+  return Math.max(y, logoY + logoH) + 8;
 }
 
 // Membuat PDF 1 halaman bergaya "Kartu Inventaris": tabel Field/Nilai di kiri,
 // foto di kanan. Dipakai baik untuk PDF 1 data (per unit) maupun PDF Rangkuman
 // grup — untuk grup, `row.nomor_register` & `row.id_pemda` sudah berisi rentang
 // (mis. "000013 – 000028") dan `subtitle` menambahkan info jumlah unit di
-// bawah judul. Judul PDF dibuat otomatis lewat buildPdfTitle().
+// bawah judul. Kop (logo + judul) dibuat lewat drawPdfLetterhead().
 async function buildRecordPdf(schema, row, { subtitle, filename } = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
 
-  const pdfTitle = buildPdfTitle(schema, row);
-  doc.setFontSize(12);
-  const titleLines = doc.splitTextToSize(pdfTitle, pageWidth - 80);
-  doc.text(titleLines, 40, 40);
-  let y = 40 + titleLines.length * 14;
+  let y = drawPdfLetterhead(doc, schema, row);
 
   doc.setFontSize(9);
   doc.setTextColor(90, 90, 90);
-  doc.text(schema.description, 40, y + 4);
+  doc.text(schema.description, 40, y);
   doc.setTextColor(0, 0, 0);
-  y += 18;
+  y += 16;
 
-  let startY = y + 14;
+  let startY = y + 8;
   if (subtitle) {
     doc.setFontSize(9);
     doc.setTextColor(30, 64, 175);
-    doc.text(subtitle, 40, y + 12);
+    doc.text(subtitle, 40, y + 10);
     doc.setTextColor(0, 0, 0);
-    startY = y + 26;
+    startY = y + 22;
   }
 
   const imageField = schema.fields.find((f) => f.type === "image");
