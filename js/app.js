@@ -897,28 +897,17 @@ function drawPdfLetterhead(doc, schema, row) {
 // Membuat PDF 1 halaman bergaya "Kartu Inventaris": tabel Field/Nilai di kiri,
 // foto di kanan. Dipakai baik untuk PDF 1 data (per unit) maupun PDF Rangkuman
 // grup — untuk grup, `row.nomor_register` & `row.id_pemda` sudah berisi rentang
-// (mis. "000013 – 000028") dan `subtitle` menambahkan info jumlah unit di
-// bawah judul. Kop (logo + judul) dibuat lewat drawPdfLetterhead().
-async function buildRecordPdf(schema, row, { subtitle, filename } = {}) {
+// (mis. "000013 – 000028"). Kop (logo + judul) dibuat lewat drawPdfLetterhead();
+// tidak ada teks lain di bawah kop supaya PDF selalu muat 1 halaman.
+async function buildRecordPdf(schema, row, { filename } = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
 
-  let y = drawPdfLetterhead(doc, schema, row);
-
-  doc.setFontSize(9);
-  doc.setTextColor(90, 90, 90);
-  doc.text(schema.description, doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
-  doc.setTextColor(0, 0, 0);
-  y += 16;
-
-  let startY = y + 8;
-  if (subtitle) {
-    doc.setFontSize(9);
-    doc.setTextColor(30, 64, 175);
-    doc.text(subtitle, 40, y + 10);
-    doc.setTextColor(0, 0, 0);
-    startY = y + 22;
-  }
+  // Baris deskripsi KIB & subjudul rangkuman grup (jumlah unit / rentang No.
+  // Register & ID Pemda) sengaja TIDAK dicetak lagi di sini — supaya tabel
+  // Field/Nilai + foto selalu muat dalam 1 halaman dan PDF tidak meluber ke
+  // halaman ke-2.
+  const startY = drawPdfLetterhead(doc, schema, row) + 4;
 
   const imageField = schema.fields.find((f) => f.type === "image");
   if (imageField && row[imageField.key]) {
@@ -961,7 +950,6 @@ async function exportGroupPdf(schema, group) {
   const row = { ...group.items[0], nomor_register: group.regRange, id_pemda: group.idPemdaRange };
   const safeName = String(group.name).replace(/[^a-z0-9]+/gi, "_").toLowerCase();
   await buildRecordPdf(schema, row, {
-    subtitle: `Rangkuman grup • ${group.count} unit • No. Register ${group.regRange} • ID Pemda ${group.idPemdaRange}`,
     filename: `${schema.table}_rangkuman_${safeName}.pdf`,
   });
 }
