@@ -335,8 +335,16 @@ function renderGroupedTable(schema, rows) {
       <td>${escapeHtml(group.name)}</td>
       <td>${group.count}<span class="group-count-badge">${group.count} unit</span></td>
       <td>${escapeHtml(group.regRange)}</td>
-      <td class="muted small">Klik baris untuk lihat detail</td>
+      <td class="actions-cell">
+        <button class="link-btn" data-action="group-pdf">⬇ PDF Grup</button>
+      </td>
     `;
+    groupTr
+      .querySelector('[data-action="group-pdf"]')
+      .addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        exportGroupPdf(schema, group);
+      });
 
     const childTr = document.createElement("tr");
     childTr.className = "group-children-row" + (isOpen ? " open" : "");
@@ -595,6 +603,35 @@ function exportTablePdf(schema, rows) {
   });
 
   doc.save(`${schema.table}.pdf`);
+}
+
+// Ekspor 1 grup (mis. "Buku" dengan 10 unit) menjadi SATU file PDF yang memuat
+// seluruh anggota grup sebagai tabel — bukan 1 file per unit/data.
+function exportGroupPdf(schema, group) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+  doc.setFontSize(12);
+  doc.text(schema.title, 40, 30);
+  doc.setFontSize(9);
+  doc.text(`Kelompok: ${group.name}  •  ${group.count} unit  •  No. Register ${group.regRange}`, 40, 45);
+
+  const headers = schema.fields.map((f) => f.label);
+  const keys = schema.fields.map((f) => f.key);
+  const body = group.items.map((row) => keys.map((k) => (row[k] ?? "").toString()));
+
+  doc.autoTable({
+    startY: 60,
+    head: [headers],
+    body,
+    styles: { fontSize: 7, cellPadding: 3 },
+    headStyles: { fillColor: [30, 64, 175] },
+    theme: "grid",
+    margin: { left: 20, right: 20 },
+  });
+
+  const safeName = String(group.name).replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+  doc.save(`${schema.table}_${safeName}.pdf`);
 }
 
 function exportSingleRecordPdf(schema, row) {
