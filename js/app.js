@@ -16,9 +16,9 @@ let page = 0;
 let search = "";
 let totalCount = 0;
 let editingRow = null; // record currently in the add/edit modal
+let editingGroupIds = null; // saat mengedit satu grup sekaligus: daftar id unit yang akan ikut diupdate
 let deleteTarget = null;
 let groupedView = true; // tampilan tabel dikelompokkan otomatis berdasarkan Nama Barang
-let openGroupKeys = new Set(); // grup mana saja yang sedang di-expand (per nama_barang)
 
 // ---------- DOM refs ----------
 const loginScreen = document.getElementById("loginScreen");
@@ -123,7 +123,6 @@ function buildSidebar() {
       page = 0;
       search = "";
       searchInput.value = "";
-      openGroupKeys.clear();
       buildSidebar();
       loadData();
     });
@@ -341,13 +340,19 @@ function groupRowsByName(rows) {
 }
 
 function renderGroupedTable(schema, rows) {
-  const displayFields = getDisplayFields(schema);
+  // Kolom grup = displayFields skema, tapi "Nomor Register" diganti kolom
+  // "Rentang No. Register" dan ditambah "Jumlah Unit" (karena tiap grup
+  // berisi banyak unit dengan No. Register berbeda-beda).
+  const baseFields = getDisplayFields(schema).filter((f) => f.key !== "nomor_register");
 
   tableHeadRow.innerHTML =
-    `<th style="width:2rem"></th><th>Nama Barang</th><th>Jumlah Unit</th><th>Rentang No. Register</th><th>Aksi</th>`;
+    baseFields.map((f) => `<th>${f.label}</th>`).join("") +
+    `<th>Jumlah Unit</th><th>Rentang No. Register</th><th>Aksi</th>`;
 
   if (rows.length === 0) {
-    tableBody.innerHTML = `<tr><td class="muted center" colspan="5">Belum ada data. Klik "Tambah Data" untuk mulai mengisi.</td></tr>`;
+    tableBody.innerHTML = `<tr><td class="muted center" colspan="${
+      baseFields.length + 3
+    }">Belum ada data. Klik "Tambah Data" untuk mulai mengisi.</td></tr>`;
     return;
   }
 
@@ -355,70 +360,23 @@ function renderGroupedTable(schema, rows) {
   tableBody.innerHTML = "";
 
   groups.forEach((group) => {
-    const isOpen = openGroupKeys.has(group.name);
+    const sample = group.items[0]; // wakili data yang sama di seluruh grup
 
-    const groupTr = document.createElement("tr");
-    groupTr.className = "group-row" + (isOpen ? " expanded" : "");
-    groupTr.innerHTML = `
-      <td><span class="group-caret">▶</span></td>
-      <td>${escapeHtml(group.name)}</td>
-      <td>${group.count}<span class="group-count-badge">${group.count} unit</span></td>
-      <td>${escapeHtml(group.regRange)}</td>
-      <td class="actions-cell">
-        <button class="link-btn" data-action="group-pdf">⬇ PDF Grup</button>
-      </td>
-    `;
-    groupTr
-      .querySelector('[data-action="group-pdf"]')
-      .addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        exportGroupPdf(schema, group);
-      });
+    const tr = document.createElement("tr");
+    tr.className = "group-row";
+    tr.innerHTML =
+      baseFields.map((f) => `<td>${renderCell(f, sample)}</td>`).join("") +
+      `<td><span class="group-count-badge">${group.count} unit</span></td>
+       <td>${escapeHtml(group.regRange)}</td>
+       <td class="actions-cell">
+         <button class="link-btn" data-action="edit-group">Edit</button>
+         <button class="link-btn" data-action="pdf-group">⬇ PDF Rangkuman</button>
+       </td>`;
 
-    const childTr = document.createElement("tr");
-    childTr.className = "group-children-row" + (isOpen ? " open" : "");
-    const childTd = document.createElement("td");
-    childTd.colSpan = 5;
-    childTd.className = "child-cell";
+    tr.querySelector('[data-action="edit-group"]').addEventListener("click", () => openGroupEditModal(schema, group));
+    tr.querySelector('[data-action="pdf-group"]').addEventListener("click", () => exportGroupPdf(schema, group));
 
-    const childTable = document.createElement("table");
-    childTable.innerHTML = `<thead><tr>${displayFields
-      .map((f) => `<th>${f.label}</th>`)
-      .join("")}<th>Aksi</th></tr></thead><tbody></tbody>`;
-    const childBody = childTable.querySelector("tbody");
-
-    group.items.forEach((row) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML =
-        displayFields.map((f) => `<td>${renderCell(f, row)}</td>`).join("") +
-        `<td class="actions-cell">
-           <button class="link-btn" data-action="edit">Edit</button>
-           <button class="link-btn danger" data-action="delete">Hapus</button>
-           <button class="link-btn" data-action="pdf">PDF</button>
-         </td>`;
-      tr.querySelector('[data-action="edit"]').addEventListener("click", () => openFormModal(row));
-      tr.querySelector('[data-action="delete"]').addEventListener("click", () => openConfirmModal(row));
-      tr.querySelector('[data-action="pdf"]').addEventListener("click", () => exportSingleRecordPdf(schema, row));
-      childBody.appendChild(tr);
-    });
-
-    childTd.appendChild(childTable);
-    childTr.appendChild(childTd);
-
-    groupTr.addEventListener("click", () => {
-      if (openGroupKeys.has(group.name)) {
-        openGroupKeys.delete(group.name);
-        groupTr.classList.remove("expanded");
-        childTr.classList.remove("open");
-      } else {
-        openGroupKeys.add(group.name);
-        groupTr.classList.add("expanded");
-        childTr.classList.add("open");
-      }
-    });
-
-    tableBody.appendChild(groupTr);
-    tableBody.appendChild(childTr);
+    tableBody.appendChild(tr);
   });
 }
 
@@ -506,7 +464,16 @@ async function uploadPendingPhotos() {
       cacheControl: "3600",
       upsert: false,
     });
-    if (error) throw new Error(`Gagal unggah foto: ${error.message}`);
+    if (error) {
+      if (/bucket not found/i.test(error.message)) {
+        throw new Error(
+          `Bucket Storage "${PHOTO_BUCKET}" belum ada di project Supabase Anda. ` +
+          `Buka Supabase Dashboard → Storage → New bucket → beri nama persis "${PHOTO_BUCKET}" ` +
+          `→ aktifkan "Public bucket" → Save. Lalu coba unggah foto lagi.`
+        );
+      }
+      throw new Error(`Gagal unggah foto: ${error.message}`);
+    }
     const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
     result[key] = data.publicUrl;
   }
@@ -522,11 +489,17 @@ formModalOverlay.addEventListener("click", (e) => {
   if (e.target === formModalOverlay) closeFormModal();
 });
 
-function openFormModal(record) {
+function openFormModal(record, opts = {}) {
   editingRow = { ...record };
+  editingGroupIds = opts.groupIds || null;
   const schema = currentSchema();
   const isEdit = Boolean(record.id);
-  formModalTitle.textContent = isEdit ? "Edit Data Aset" : "Tambah Data Aset";
+  const isGroupEdit = Boolean(editingGroupIds);
+  formModalTitle.textContent = isGroupEdit
+    ? `Edit Grup: ${record.nama_barang || ""} (${editingGroupIds.length} unit)`
+    : isEdit
+    ? "Edit Data Aset"
+    : "Tambah Data Aset";
   pendingPhotoFiles = {};
 
   formGrid.innerHTML = "";
@@ -566,20 +539,39 @@ function openFormModal(record) {
     input.value = record[f.key] ?? "";
     if (f.required) input.required = true;
 
+    // Saat edit grup: No. Register beda-beda per unit, jadi field ini dikunci
+    // (tidak ikut diubah massal) supaya tidak menimpa nomor tiap unit.
+    if (isGroupEdit && f.key === "nomor_register") {
+      input.readOnly = true;
+      input.value = record.regRangeLabel || input.value;
+      input.title = "Nomor Register berbeda per unit — tidak diubah lewat edit grup.";
+      wrap.classList.add("locked");
+    }
+
     wrap.appendChild(input);
     formGrid.appendChild(wrap);
   });
 
-  // Otomatisasi No. Register hanya berlaku saat menambah data baru, bukan saat edit
+  // Otomatisasi No. Register (batch) hanya berlaku saat menambah data baru
   batchQtyInput.value = "1";
-  batchSection.style.display = isEdit ? "none" : "block";
+  batchSection.style.display = isEdit || isGroupEdit ? "none" : "block";
 
   formModalOverlay.style.display = "flex";
+}
+
+// Membuka form edit untuk SATU grup sekaligus: prefill dari data unit
+// pertama, No. Register dikunci (menampilkan rentangnya), dan saat disimpan
+// perubahan diterapkan ke SEMUA unit dalam grup itu (lihat submit handler).
+function openGroupEditModal(schema, group) {
+  const sample = { ...group.items[0], regRangeLabel: group.regRange };
+  const ids = group.items.map((r) => r.id);
+  openFormModal(sample, { groupIds: ids });
 }
 
 function closeFormModal() {
   formModalOverlay.style.display = "none";
   editingRow = null;
+  editingGroupIds = null;
   pendingPhotoFiles = {};
 }
 
@@ -638,13 +630,19 @@ assetForm.addEventListener("submit", async (e) => {
   });
   Object.assign(payload, uploadedUrls);
 
-  const isEdit = Boolean(editingRow && editingRow.id);
-  const batchQty = isEdit ? 1 : Math.max(1, parseInt(batchQtyInput.value, 10) || 1);
+  const isGroupEdit = Boolean(editingGroupIds && editingGroupIds.length);
+  const isEdit = !isGroupEdit && Boolean(editingRow && editingRow.id);
+  const batchQty = isEdit || isGroupEdit ? 1 : Math.max(1, parseInt(batchQtyInput.value, 10) || 1);
 
   formSaveBtn.textContent = "Menyimpan…";
 
   let error;
-  if (isEdit) {
+  if (isGroupEdit) {
+    // Edit massal: No. Register tiap unit tetap masing-masing, field lain
+    // (termasuk foto) diterapkan ke semua unit dalam grup ini sekaligus.
+    delete payload.nomor_register;
+    ({ error } = await supabase.from(schema.table).update(payload).in("id", editingGroupIds));
+  } else if (isEdit) {
     ({ error } = await supabase.from(schema.table).update(payload).eq("id", editingRow.id));
   } else if (batchQty > 1) {
     // Buat beberapa unit sekaligus dengan data sama, No. Register berurutan otomatis,
@@ -746,39 +744,6 @@ function exportTablePdf(schema, rows) {
   doc.save(`${schema.table}.pdf`);
 }
 
-// Ekspor 1 grup (mis. "Buku" dengan 10 unit) menjadi SATU file PDF yang memuat
-// seluruh anggota grup sebagai tabel — bukan 1 file per unit/data.
-function exportGroupPdf(schema, group) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-
-  doc.setFontSize(12);
-  doc.text(schema.title, 40, 30);
-  doc.setFontSize(9);
-  doc.text(`Kelompok: ${group.name}  •  ${group.count} unit  •  No. Register ${group.regRange}`, 40, 45);
-
-  const headers = schema.fields.map((f) => f.label);
-  const body = group.items.map((row) =>
-    schema.fields.map((f) => {
-      if (f.type === "image") return row[f.key] ? "(ada foto)" : "-";
-      return (row[f.key] ?? "").toString();
-    })
-  );
-
-  doc.autoTable({
-    startY: 60,
-    head: [headers],
-    body,
-    styles: { fontSize: 7, cellPadding: 3 },
-    headStyles: { fillColor: [30, 64, 175] },
-    theme: "grid",
-    margin: { left: 20, right: 20 },
-  });
-
-  const safeName = String(group.name).replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-  doc.save(`${schema.table}_${safeName}.pdf`);
-}
-
 // Mengambil gambar dari URL publik Supabase Storage dan mengubahnya menjadi
 // data URL base64 supaya bisa disisipkan ke PDF via jsPDF.addImage. Kalau
 // gagal (mis. offline / CORS), kembalikan null dan PDF tetap dibuat tanpa foto.
@@ -799,24 +764,34 @@ async function fetchImageAsDataUrl(url) {
   }
 }
 
-async function exportSingleRecordPdf(schema, row) {
+// Membuat PDF 1 halaman bergaya "Kartu Inventaris": tabel Field/Nilai di kiri,
+// foto di kanan. Dipakai baik untuk PDF 1 data (per unit) maupun PDF Rangkuman
+// grup — untuk grup, `row.nomor_register` sudah berisi rentang (mis. "000013 – 000028")
+// dan `subtitle` menambahkan info jumlah unit di bawah judul.
+async function buildRecordPdf(schema, row, { subtitle, filename } = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   doc.setFontSize(14);
   doc.text(schema.title, 40, 40);
   doc.setFontSize(10);
   doc.text(schema.description, 40, 58);
+  let startY = 80;
+  if (subtitle) {
+    doc.setFontSize(9);
+    doc.setTextColor(30, 64, 175);
+    doc.text(subtitle, 40, 74);
+    doc.setTextColor(0, 0, 0);
+    startY = 92;
+  }
 
   const imageField = schema.fields.find((f) => f.type === "image");
-  let startY = 80;
-
   if (imageField && row[imageField.key]) {
     const img = await fetchImageAsDataUrl(row[imageField.key]);
     if (img) {
       const pageWidth = doc.internal.pageSize.getWidth();
       const imgWidth = 140;
       const imgHeight = 180;
-      doc.addImage(img.dataUrl, img.format, pageWidth - 40 - imgWidth, 75, imgWidth, imgHeight);
+      doc.addImage(img.dataUrl, img.format, pageWidth - 40 - imgWidth, startY - 5, imgWidth, imgHeight);
     }
   }
 
@@ -835,7 +810,23 @@ async function exportSingleRecordPdf(schema, row) {
     theme: "grid",
   });
 
-  doc.save(`${schema.table}_${row.id || "record"}.pdf`);
+  doc.save(filename);
+}
+
+async function exportSingleRecordPdf(schema, row) {
+  await buildRecordPdf(schema, row, { filename: `${schema.table}_${row.id || "record"}.pdf` });
+}
+
+// PDF Rangkuman grup: 1 halaman yang mewakili seluruh unit dalam grup (data
+// diambil dari unit pertama, karena field-nya sama persis untuk semua unit),
+// dengan Nomor Register otomatis ditampilkan sebagai rentang (mis. "000013 – 000028").
+async function exportGroupPdf(schema, group) {
+  const row = { ...group.items[0], nomor_register: group.regRange };
+  const safeName = String(group.name).replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+  await buildRecordPdf(schema, row, {
+    subtitle: `Rangkuman grup • ${group.count} unit • No. Register ${group.regRange}`,
+    filename: `${schema.table}_rangkuman_${safeName}.pdf`,
+  });
 }
 
 // ================= IMPORT EXCEL =================
