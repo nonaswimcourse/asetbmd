@@ -784,7 +784,7 @@ function exportTablePdf(schema, rows) {
   const y = drawPdfLetterhead(doc, schema, {});
   doc.setFontSize(9);
   doc.setTextColor(90, 90, 90);
-  doc.text(schema.description, 40, y);
+  doc.text(schema.description, doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
   doc.setTextColor(0, 0, 0);
 
   const headers = schema.fields.map((f) => f.label);
@@ -846,7 +846,8 @@ function getRecordYear(schema, row) {
 // Mengembalikan koordinat Y tempat konten berikutnya boleh mulai digambar.
 function drawPdfLetterhead(doc, schema, row) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  const logoX = 40;
+  const marginX = 40;
+  const logoX = marginX;
   const logoY = 22;
   const logoW = 46;
   const logoH = 44;
@@ -863,8 +864,12 @@ function drawPdfLetterhead(doc, schema, row) {
   if (unit) line2 += ` ${unit}`;
   if (year) line2 += ` TAHUN ${year}`;
 
-  const textX = logoX + logoW + 16;
-  const maxTextWidth = pageWidth - textX - 40;
+  // Judul di-tengahkan ke LEBAR HALAMAN (bukan cuma nempel di sebelah kanan
+  // logo) supaya rapi seperti kop surat resmi. Lebar teks dibatasi simetris
+  // (jarak dari logo di kiri = jarak dari tepi kanan) supaya tidak menabrak logo.
+  const centerX = pageWidth / 2;
+  const sideMargin = logoX + logoW + 16;
+  const maxTextWidth = pageWidth - sideMargin * 2;
 
   doc.setFont(undefined, "bold");
   doc.setFontSize(13);
@@ -872,13 +877,21 @@ function drawPdfLetterhead(doc, schema, row) {
   const line2Wrapped = doc.splitTextToSize(line2, maxTextWidth);
 
   let y = logoY + 16;
-  doc.text(line1Wrapped, textX, y);
+  doc.text(line1Wrapped, centerX, y, { align: "center" });
   y += line1Wrapped.length * 16 + 6;
-  doc.text(line2Wrapped, textX, y);
+  doc.text(line2Wrapped, centerX, y, { align: "center" });
   y += line2Wrapped.length * 16;
   doc.setFont(undefined, "normal");
 
-  return Math.max(y, logoY + logoH) + 8;
+  const headerBottom = Math.max(y, logoY + logoH) + 8;
+
+  // Garis pemisah di bawah kop, rata kiri-kanan (dari margin kiri sampai
+  // margin kanan halaman) — ciri khas kop surat resmi.
+  doc.setDrawColor(30, 64, 175);
+  doc.setLineWidth(1);
+  doc.line(marginX, headerBottom, pageWidth - marginX, headerBottom);
+
+  return headerBottom + 10;
 }
 
 // Membuat PDF 1 halaman bergaya "Kartu Inventaris": tabel Field/Nilai di kiri,
@@ -894,7 +907,7 @@ async function buildRecordPdf(schema, row, { subtitle, filename } = {}) {
 
   doc.setFontSize(9);
   doc.setTextColor(90, 90, 90);
-  doc.text(schema.description, 40, y);
+  doc.text(schema.description, doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
   doc.setTextColor(0, 0, 0);
   y += 16;
 
