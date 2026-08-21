@@ -224,3 +224,16 @@ tbody tr:hover { background: #f9fafb; }
   color: #6b7280;
   cursor: not-allowed;
 }
+
+/* No. Register / ID Pemda saat edit grup: bukan dikunci, tapi dipakai
+   sebagai nilai awal yang otomatis diberi urutan ke seluruh unit grup. */
+.form-field.group-sequential input {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+.form-field.group-sequential .field-hint {
+  font-size: 0.72rem;
+  color: #2563eb;
+  margin-top: 0.25rem;
+  line-height: 1.3;
+}
