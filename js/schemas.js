@@ -20,6 +20,7 @@ export const JENIS_BUKU_OPTIONS = [
 ];
 
 const baseIdentity = [
+  { key: "no_urut", label: "No Urut", type: "text" },
   { key: "id_pemda", label: "ID Pemda", type: "text" },
   { key: "kode_upb", label: "Kode UPB", type: "text" },
   { key: "unit_kerja", label: "Unit Kerja", type: "text", required: true },
@@ -128,6 +129,7 @@ export const KIB_SCHEMAS = {
     // Kolom yang ditampilkan di tabel depan (urut sesuai kebutuhan: jenis buku,
     // judul buku, harga, tahun), berbeda dari KIB A-D yang memakai 7 field identitas.
     displayFields: [
+      "no_urut",
       "foto_url",
       "nomor_register",
       "nama_barang",

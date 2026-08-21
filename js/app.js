@@ -136,21 +136,21 @@ function buildSidebar() {
 function searchableColumns(schema) {
   if (schema.searchFields) return schema.searchFields;
   return schema.fields
-    .filter((f) => f.type === "text")
+    .filter((f) => f.type === "text" && f.key !== "no_urut")
     .slice(0, 4)
     .map((f) => f.key);
 }
 
 // Mengembalikan daftar field yang dipakai sebagai kolom tabel depan.
 // Kalau skema mendefinisikan `displayFields` (daftar key), pakai itu;
-// kalau tidak, jatuh ke default: 7 field pertama pada skema.
+// kalau tidak, jatuh ke default: 8 field pertama pada skema (termasuk No Urut).
 function getDisplayFields(schema) {
   if (schema.displayFields) {
     return schema.displayFields
       .map((key) => schema.fields.find((f) => f.key === key))
       .filter(Boolean);
   }
-  return schema.fields.slice(0, 7);
+  return schema.fields.slice(0, 8);
 }
 
 async function loadData() {
@@ -347,6 +347,7 @@ function groupRowsByName(rows) {
   return Array.from(map.entries()).map(([name, items]) => {
     const sortedRegs = sortedFieldValues(items, "nomor_register");
     const sortedIdPemda = sortedFieldValues(items, "id_pemda");
+    const sortedNoUrut = sortedFieldValues(items, "no_urut");
     return {
       name,
       items,
@@ -355,6 +356,8 @@ function groupRowsByName(rows) {
       regStart: sortedRegs[0] || "",
       idPemdaRange: rangeLabel(sortedIdPemda),
       idPemdaStart: sortedIdPemda[0] || "",
+      noUrutRange: rangeLabel(sortedNoUrut),
+      noUrutStart: sortedNoUrut[0] || "",
     };
   });
 }
@@ -363,16 +366,18 @@ function renderGroupedTable(schema, rows) {
   // Kolom grup = displayFields skema, tapi "Nomor Register" diganti kolom
   // "Rentang No. Register" dan ditambah "Jumlah Unit" (karena tiap grup
   // berisi banyak unit dengan No. Register berbeda-beda).
-  const baseFields = getDisplayFields(schema).filter((f) => f.key !== "nomor_register");
+  const baseFields = getDisplayFields(schema).filter(
+    (f) => f.key !== "nomor_register" && f.key !== "no_urut"
+  );
 
   tableHeadRow.innerHTML =
     `<th>No</th>` +
     baseFields.map((f) => `<th>${f.label}</th>`).join("") +
-    `<th>Jumlah Unit</th><th>Rentang No. Register</th><th>Aksi</th>`;
+    `<th>Jumlah Unit</th><th>Rentang No Urut</th><th>Rentang No. Register</th><th>Aksi</th>`;
 
   if (rows.length === 0) {
     tableBody.innerHTML = `<tr><td class="muted center" colspan="${
-      baseFields.length + 4
+      baseFields.length + 5
     }">Belum ada data. Klik "Tambah Data" untuk mulai mengisi.</td></tr>`;
     return;
   }
@@ -391,6 +396,7 @@ function renderGroupedTable(schema, rows) {
       `<td>${noUrut}</td>` +
       baseFields.map((f) => `<td>${renderCell(f, sample)}</td>`).join("") +
       `<td><span class="group-count-badge">${group.count} unit</span></td>
+       <td>${escapeHtml(group.noUrutRange)}</td>
        <td>${escapeHtml(group.regRange)}</td>
        <td class="actions-cell">
          <button class="link-btn" data-action="edit-group">Edit</button>
@@ -563,13 +569,25 @@ function openFormModal(record, opts = {}) {
     input.value = record[f.key] ?? "";
     if (f.required) input.required = true;
 
-    // Saat edit grup: No. Register & ID Pemda berbeda per unit. Field ini TIDAK
-    // dikunci — nilai yang diisi di sini dipakai sebagai nilai AWAL, lalu saat
+    // Tambah Data baru (bukan edit, bukan edit grup): "No Urut" diisi contoh
+    // nilai awal berpadding 4 digit ("0001") supaya saat batch >1 langsung
+    // menghasilkan rentang rapi seperti 0001-0010. User tetap bebas mengubahnya.
+    if (!isEdit && !isGroupEdit && f.key === "no_urut" && !record.no_urut) {
+      input.value = "0001";
+    }
+
+    // Saat edit grup: No Urut, No. Register & ID Pemda berbeda per unit. Field ini
+    // TIDAK dikunci — nilai yang diisi di sini dipakai sebagai nilai AWAL, lalu saat
     // disimpan setiap unit dalam grup otomatis mendapat nilai berurutan
     // (unit 1 = nilai awal, unit 2 = nilai berikutnya, dst).
-    if (isGroupEdit && (f.key === "nomor_register" || f.key === "id_pemda")) {
+    if (isGroupEdit && (f.key === "nomor_register" || f.key === "id_pemda" || f.key === "no_urut")) {
       wrap.classList.add("group-sequential");
-      const rangeText = f.key === "nomor_register" ? record.regRangeLabel : record.idPemdaRangeLabel;
+      const rangeText =
+        f.key === "nomor_register"
+          ? record.regRangeLabel
+          : f.key === "id_pemda"
+          ? record.idPemdaRangeLabel
+          : record.noUrutRangeLabel;
       input.title =
         `Rentang saat ini: ${rangeText || "-"}. Nilai di sini dipakai sebagai nilai AWAL — ` +
         `akan diisi otomatis berurutan ke seluruh ${editingGroupIds ? editingGroupIds.length : 0} unit dalam grup ini.`;
@@ -603,8 +621,10 @@ function openGroupEditModal(schema, group) {
     ...group.items[0],
     nomor_register: group.regStart || group.items[0].nomor_register || "",
     id_pemda: group.idPemdaStart || group.items[0].id_pemda || "",
+    no_urut: group.noUrutStart || group.items[0].no_urut || "",
     regRangeLabel: group.regRange,
     idPemdaRangeLabel: group.idPemdaRange,
+    noUrutRangeLabel: group.noUrutRange,
   };
   const ids = group.items.map((r) => r.id);
   openFormModal(sample, { groupIds: ids });
@@ -621,17 +641,17 @@ function closeFormModal() {
 // angka yang terkandung pada `startReg` (mis. "001" -> 001..010). Prefix/teks
 // non-angka pada startReg tetap dipertahankan (mis. "REG-001" -> REG-002, ...),
 // dan lebar padding angka mengikuti panjang digit pada startReg (minimal 3).
-function generateSequentialRegisters(startReg, qty) {
+function generateSequentialRegisters(startReg, qty, minWidth = 3) {
   const raw = (startReg ?? "").toString().trim();
   const match = raw.match(/^(.*?)(\d+)(\D*)$/);
   let prefix = "";
   let suffix = "";
-  let width = 3;
+  let width = minWidth;
   let start = 1;
   if (match) {
     prefix = match[1];
     suffix = match[3];
-    width = Math.max(match[2].length, 3);
+    width = Math.max(match[2].length, minWidth);
     start = parseInt(match[2], 10);
   } else if (raw) {
     // tidak ada angka sama sekali, pakai teks apa adanya sebagai prefix
@@ -688,15 +708,19 @@ assetForm.addEventListener("submit", async (e) => {
     const qty = editingGroupIds.length;
     const startReg = payload.nomor_register;
     const startIdPemda = payload.id_pemda;
+    const startNoUrut = payload.no_urut;
     const newRegs = startReg ? generateSequentialRegisters(startReg, qty) : null;
     const newIdPemda = startIdPemda ? generateSequentialRegisters(startIdPemda, qty) : null;
+    const newNoUrut = startNoUrut ? generateSequentialRegisters(startNoUrut, qty, 4) : null;
     delete payload.nomor_register;
     delete payload.id_pemda;
+    delete payload.no_urut;
 
     for (let i = 0; i < editingGroupIds.length; i += 1) {
       const rowPayload = { ...payload };
       if (newRegs) rowPayload.nomor_register = newRegs[i];
       if (newIdPemda) rowPayload.id_pemda = newIdPemda[i];
+      if (newNoUrut) rowPayload.no_urut = newNoUrut[i];
       const { error: rowError } = await supabase
         .from(schema.table)
         .update(rowPayload)
@@ -712,7 +736,12 @@ assetForm.addEventListener("submit", async (e) => {
     // Buat beberapa unit sekaligus dengan data sama, No. Register berurutan otomatis,
     // dan otomatis mengelompok (grup ditentukan dari nama_barang yang sama).
     const registers = generateSequentialRegisters(payload.nomor_register, batchQty);
-    const rows = registers.map((reg) => ({ ...payload, nomor_register: reg }));
+    const noUruts = payload.no_urut ? generateSequentialRegisters(payload.no_urut, batchQty, 4) : null;
+    const rows = registers.map((reg, i) => ({
+      ...payload,
+      nomor_register: reg,
+      ...(noUruts ? { no_urut: noUruts[i] } : {}),
+    }));
     ({ error } = await supabase.from(schema.table).insert(rows));
   } else {
     ({ error } = await supabase.from(schema.table).insert(payload));
@@ -961,7 +990,12 @@ async function exportSingleRecordPdf(schema, row, noUrut) {
 // dengan Nomor Register DAN ID Pemda otomatis ditampilkan sebagai rentang
 // (mis. "000013 – 000028"), bukan cuma nilai unit pertama saja.
 async function exportGroupPdf(schema, group, noUrut) {
-  const row = { ...group.items[0], nomor_register: group.regRange, id_pemda: group.idPemdaRange };
+  const row = {
+    ...group.items[0],
+    nomor_register: group.regRange,
+    id_pemda: group.idPemdaRange,
+    no_urut: group.noUrutRange,
+  };
   const safeName = String(group.name).replace(/[^a-z0-9]+/gi, "_").toLowerCase();
   await buildRecordPdf(schema, row, {
     filename: `${schema.table}_rangkuman_${safeName}.pdf`,
