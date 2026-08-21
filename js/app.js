@@ -267,19 +267,23 @@ function renderTable(schema, rows) {
   const displayFields = getDisplayFields(schema);
 
   tableHeadRow.innerHTML =
-    displayFields.map((f) => `<th>${f.label}</th>`).join("") + `<th>Aksi</th>`;
+    `<th>No</th>` + displayFields.map((f) => `<th>${f.label}</th>`).join("") + `<th>Aksi</th>`;
 
   if (rows.length === 0) {
     tableBody.innerHTML = `<tr><td class="muted center" colspan="${
-      displayFields.length + 1
+      displayFields.length + 2
     }">Belum ada data. Klik "Tambah Data" untuk mulai mengisi.</td></tr>`;
     return;
   }
 
   tableBody.innerHTML = "";
-  rows.forEach((row) => {
+  rows.forEach((row, idx) => {
+    // No urut otomatis mengikuti nomor baris (menyesuaikan halaman aktif),
+    // bukan disimpan ke database — selalu berurutan & konsisten dengan urutan tabel.
+    const noUrut = page * PAGE_SIZE + idx + 1;
     const tr = document.createElement("tr");
     tr.innerHTML =
+      `<td>${noUrut}</td>` +
       displayFields.map((f) => `<td>${renderCell(f, row)}</td>`).join("") +
       `<td class="actions-cell">
          <button class="link-btn" data-action="edit">Edit</button>
@@ -289,7 +293,7 @@ function renderTable(schema, rows) {
 
     tr.querySelector('[data-action="edit"]').addEventListener("click", () => openFormModal(row));
     tr.querySelector('[data-action="delete"]').addEventListener("click", () => openConfirmModal(row));
-    tr.querySelector('[data-action="pdf"]').addEventListener("click", () => exportSingleRecordPdf(schema, row));
+    tr.querySelector('[data-action="pdf"]').addEventListener("click", () => exportSingleRecordPdf(schema, row, noUrut));
 
     tableBody.appendChild(tr);
   });
@@ -362,12 +366,13 @@ function renderGroupedTable(schema, rows) {
   const baseFields = getDisplayFields(schema).filter((f) => f.key !== "nomor_register");
 
   tableHeadRow.innerHTML =
+    `<th>No</th>` +
     baseFields.map((f) => `<th>${f.label}</th>`).join("") +
     `<th>Jumlah Unit</th><th>Rentang No. Register</th><th>Aksi</th>`;
 
   if (rows.length === 0) {
     tableBody.innerHTML = `<tr><td class="muted center" colspan="${
-      baseFields.length + 3
+      baseFields.length + 4
     }">Belum ada data. Klik "Tambah Data" untuk mulai mengisi.</td></tr>`;
     return;
   }
@@ -375,12 +380,15 @@ function renderGroupedTable(schema, rows) {
   const groups = groupRowsByName(rows);
   tableBody.innerHTML = "";
 
-  groups.forEach((group) => {
+  groups.forEach((group, idx) => {
     const sample = group.items[0]; // wakili data yang sama di seluruh grup
+    // No urut mengikuti urutan grup di tampilan ini (tidak disimpan ke database).
+    const noUrut = idx + 1;
 
     const tr = document.createElement("tr");
     tr.className = "group-row";
     tr.innerHTML =
+      `<td>${noUrut}</td>` +
       baseFields.map((f) => `<td>${renderCell(f, sample)}</td>`).join("") +
       `<td><span class="group-count-badge">${group.count} unit</span></td>
        <td>${escapeHtml(group.regRange)}</td>
@@ -390,7 +398,7 @@ function renderGroupedTable(schema, rows) {
        </td>`;
 
     tr.querySelector('[data-action="edit-group"]').addEventListener("click", () => openGroupEditModal(schema, group));
-    tr.querySelector('[data-action="pdf-group"]').addEventListener("click", () => exportGroupPdf(schema, group));
+    tr.querySelector('[data-action="pdf-group"]').addEventListener("click", () => exportGroupPdf(schema, group, noUrut));
 
     tableBody.appendChild(tr);
   });
@@ -753,8 +761,9 @@ exportExcelBtn.addEventListener("click", async () => {
   if (error) return alert("Gagal mengambil data: " + error.message);
 
   const headers = schema.fields.map((f) => f.label);
-  const rows = (data || []).map((row) => {
-    const obj = {};
+  const rows = (data || []).map((row, idx) => {
+    // Kolom "No" (No urut) otomatis ditambahkan sebagai kolom pertama.
+    const obj = { No: idx + 1 };
     schema.fields.forEach((f, i) => (obj[headers[i]] = row[f.key] ?? ""));
     return obj;
   });
@@ -787,9 +796,11 @@ function exportTablePdf(schema, rows) {
   doc.text(schema.description, doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
   doc.setTextColor(0, 0, 0);
 
-  const headers = schema.fields.map((f) => f.label);
+  // Kolom "No" (No urut) otomatis ditambahkan sebagai kolom pertama, sama
+  // seperti No urut yang tampil di tabel utama.
+  const headers = ["No", ...schema.fields.map((f) => f.label)];
   const keys = schema.fields.map((f) => f.key);
-  const body = rows.map((row) => keys.map((k) => (row[k] ?? "").toString()));
+  const body = rows.map((row, idx) => [String(idx + 1), ...keys.map((k) => (row[k] ?? "").toString())]);
 
   doc.autoTable({
     startY: y + 12,
@@ -899,7 +910,7 @@ function drawPdfLetterhead(doc, schema, row) {
 // grup — untuk grup, `row.nomor_register` & `row.id_pemda` sudah berisi rentang
 // (mis. "000013 – 000028"). Kop (logo + judul) dibuat lewat drawPdfLetterhead();
 // tidak ada teks lain di bawah kop supaya PDF selalu muat 1 halaman.
-async function buildRecordPdf(schema, row, { filename } = {}) {
+async function buildRecordPdf(schema, row, { filename, noUrut } = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
 
@@ -920,9 +931,12 @@ async function buildRecordPdf(schema, row, { filename } = {}) {
     }
   }
 
-  const body = schema.fields
-    .filter((f) => f.type !== "image")
-    .map((f) => [f.label, (row[f.key] ?? "").toString()]);
+  // "No" (No urut) ditambahkan sebagai baris pertama tabel Field/Nilai, sama
+  // seperti No urut yang tampil di tabel utama — supaya PDF ikut memuatnya.
+  const body = [
+    ...(noUrut ? [["No", String(noUrut)]] : []),
+    ...schema.fields.filter((f) => f.type !== "image").map((f) => [f.label, (row[f.key] ?? "").toString()]),
+  ];
 
   doc.autoTable({
     startY,
@@ -938,19 +952,20 @@ async function buildRecordPdf(schema, row, { filename } = {}) {
   doc.save(filename);
 }
 
-async function exportSingleRecordPdf(schema, row) {
-  await buildRecordPdf(schema, row, { filename: `${schema.table}_${row.id || "record"}.pdf` });
+async function exportSingleRecordPdf(schema, row, noUrut) {
+  await buildRecordPdf(schema, row, { filename: `${schema.table}_${row.id || "record"}.pdf`, noUrut });
 }
 
 // PDF Rangkuman grup: 1 halaman yang mewakili seluruh unit dalam grup (data
 // diambil dari unit pertama, karena field-nya sama persis untuk semua unit),
 // dengan Nomor Register DAN ID Pemda otomatis ditampilkan sebagai rentang
 // (mis. "000013 – 000028"), bukan cuma nilai unit pertama saja.
-async function exportGroupPdf(schema, group) {
+async function exportGroupPdf(schema, group, noUrut) {
   const row = { ...group.items[0], nomor_register: group.regRange, id_pemda: group.idPemdaRange };
   const safeName = String(group.name).replace(/[^a-z0-9]+/gi, "_").toLowerCase();
   await buildRecordPdf(schema, row, {
     filename: `${schema.table}_rangkuman_${safeName}.pdf`,
+    noUrut,
   });
 }
 
