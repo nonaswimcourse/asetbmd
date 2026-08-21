@@ -217,3 +217,10 @@ tbody tr:hover { background: #f9fafb; }
   border: 1px solid #e5e7eb;
   display: block;
 }
+
+/* Field terkunci saat edit grup (mis. No. Register, beda per unit) */
+.form-field.locked input {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}
