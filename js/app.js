@@ -120,6 +120,7 @@ function showApp(session) {
   appShell.style.display = "flex";
   userEmailLabel.textContent = session.user.email;
   buildSidebar();
+  updateGroupToggleVisibility();
   loadData();
 }
 
@@ -158,11 +159,21 @@ function buildSidebar() {
       search = "";
       searchInput.value = "";
       buildSidebar();
+      updateGroupToggleVisibility();
       loadData();
       closeMobileSidebar();
     });
     sidebarNav.appendChild(btn);
   });
+}
+
+// KIB C tidak memakai sistem pengelompokan otomatis (data KIB C berbasis
+// gedung/bangunan per unit, bukan kumpulan barang sejenis seperti KIB
+// lainnya), jadi tombol & mode kelompok disembunyikan/dinonaktifkan saat
+// KIB C aktif dan tampilannya selalu datar (flat, dengan pagination).
+function updateGroupToggleVisibility() {
+  const isKibC = activeKibKey === "C";
+  groupToggleBtn.style.display = isKibC ? "none" : "";
 }
 
 // ================= DATA LOADING =================
@@ -193,7 +204,7 @@ async function loadData() {
   pageDesc.textContent = schema.description;
   errorBox.style.display = "none";
 
-  if (groupedView) {
+  if (groupedView && schema.key !== "C") {
     await loadGroupedData(schema);
   } else {
     await loadFlatData(schema);
