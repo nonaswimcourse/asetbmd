@@ -114,9 +114,9 @@
         <div class="form-grid" id="formGrid"></div>
 
         <div class="batch-section" id="batchSection">
-          <label>Jumlah Unit (duplikasi otomatis + No Urut &amp; No. Register berurutan)</label>
+          <label id="batchSectionLabel">Jumlah Unit (duplikasi otomatis + No Urut &amp; No. Register berurutan)</label>
           <input type="number" id="batchQtyInput" min="1" step="1" value="1" />
-          <p class="muted small">
+          <p class="muted small" id="batchSectionHint">
             Isi lebih dari 1 untuk membuat beberapa unit sekaligus dengan data yang sama,
             masing-masing mendapat <b>No Urut</b> dan <b>No. Register</b> berurutan otomatis
             (mis. isi <b>10</b> dan No Urut <b>0001</b> → dibuat rentang 0001-0010). Data akan
