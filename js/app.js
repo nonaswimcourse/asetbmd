@@ -342,6 +342,10 @@ function renderCell(f, row) {
       ? `<img src="${escapeHtml(url)}" alt="foto" class="table-thumb" />`
       : `<span class="muted">-</span>`;
   }
+  if (f.type === "currency") {
+    const formatted = formatRupiah(row[f.key]);
+    return formatted ? `Rp ${escapeHtml(formatted)}` : `<span class="muted">-</span>`;
+  }
   return escapeHtml(row[f.key] ?? "-");
 }
 
@@ -349,6 +353,35 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
+}
+
+// ================= FORMAT RUPIAH =================
+// Format angka jadi "1.500.000" (pemisah ribuan pakai titik, gaya Indonesia).
+// Dipakai untuk tampilan tabel, PDF, dan input "Harga" di form (bukan untuk
+// nilai mentah yang dikirim ke database — itu tetap angka biasa).
+function formatRupiah(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const digits = String(value).replace(/[^0-9-]/g, "");
+  if (digits === "" || digits === "-") return "";
+  const num = Number(digits);
+  if (Number.isNaN(num)) return String(value);
+  return num.toLocaleString("id-ID");
+}
+
+// Mengubah string hasil ketikan user (boleh sudah ada titik/format lain)
+// menjadi angka murni, untuk dikirim ke database.
+function parseRupiah(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const digits = String(value).replace(/[^0-9-]/g, "");
+  if (digits === "" || digits === "-") return null;
+  return Number(digits);
+}
+
+// Label kolom "No Urut" bisa berbeda per skema (mis. KIB C memakai "Titik
+// Koordinat"), dipakai di header tabel kelompok ("Rentang ...").
+function noUrutLabel(schema) {
+  const f = schema.fields.find((x) => x.key === "no_urut");
+  return f ? f.label : "No Urut";
 }
 
 // ================= GROUPED TABLE RENDER =================
@@ -407,7 +440,7 @@ function renderGroupedTable(schema, rows) {
   tableHeadRow.innerHTML =
     `<th>No</th>` +
     baseFields.map((f) => `<th>${f.label}</th>`).join("") +
-    `<th>Jumlah Unit</th><th>Rentang No Urut</th><th>Rentang No. Register</th><th>Aksi</th>`;
+    `<th>Jumlah Unit</th><th>Rentang ${noUrutLabel(schema)}</th><th>Rentang No. Register</th><th>Aksi</th>`;
 
   if (rows.length === 0) {
     tableBody.innerHTML = `<tr><td class="muted center" colspan="${
@@ -595,18 +628,38 @@ function openFormModal(record, opts = {}) {
         o.textContent = opt;
         input.appendChild(o);
       });
+    } else if (f.type === "currency") {
+      input = document.createElement("input");
+      input.type = "text";
+      input.inputMode = "numeric";
+      input.placeholder = "0";
+      input.autocomplete = "off";
     } else {
       input = document.createElement("input");
       input.type = f.type === "number" ? "number" : f.type === "date" ? "date" : "text";
     }
     input.name = f.key;
-    input.value = record[f.key] ?? "";
+    input.value = f.type === "currency" ? formatRupiah(record[f.key]) : record[f.key] ?? "";
     if (f.required) input.required = true;
+
+    // Input "Harga": diformat otomatis pakai pemisah ribuan (titik) tiap kali
+    // user mengetik, supaya langsung terlihat seperti "1.500.000" (bukan cuma
+    // angka polos). Nilai mentahnya tetap dikonversi ke angka saat disimpan.
+    if (f.type === "currency") {
+      input.addEventListener("input", () => {
+        const caretFromEnd = input.value.length - input.selectionStart;
+        input.value = formatRupiah(input.value);
+        const pos = Math.max(0, input.value.length - caretFromEnd);
+        input.setSelectionRange(pos, pos);
+      });
+    }
 
     // Tambah Data baru (bukan edit, bukan edit grup): "No Urut" diisi contoh
     // nilai awal berpadding 4 digit ("0001") supaya saat batch >1 langsung
     // menghasilkan rentang rapi seperti 0001-0010. User tetap bebas mengubahnya.
-    if (!isEdit && !isGroupEdit && f.key === "no_urut" && !record.no_urut) {
+    // Tidak berlaku untuk skema yang memakai kolom ini sebagai isian bebas
+    // (mis. "Titik Koordinat" pada KIB C — lihat schema.noUrutFreeform).
+    if (!isEdit && !isGroupEdit && f.key === "no_urut" && !record.no_urut && !schema.noUrutFreeform) {
       input.value = "0001";
     }
 
@@ -722,6 +775,7 @@ assetForm.addEventListener("submit", async (e) => {
     let val = formData.get(f.key);
     if (val === "") val = null;
     if (f.type === "number" && val !== null) val = Number(val);
+    if (f.type === "currency" && val !== null) val = parseRupiah(val);
     payload[f.key] = val;
   });
   Object.assign(payload, uploadedUrls);
@@ -862,8 +916,12 @@ function exportTablePdf(schema, rows) {
   // Kolom "No" (No urut) otomatis ditambahkan sebagai kolom pertama, sama
   // seperti No urut yang tampil di tabel utama.
   const headers = ["No", ...schema.fields.map((f) => f.label)];
-  const keys = schema.fields.map((f) => f.key);
-  const body = rows.map((row, idx) => [String(idx + 1), ...keys.map((k) => (row[k] ?? "").toString())]);
+  const body = rows.map((row, idx) => [
+    String(idx + 1),
+    ...schema.fields.map((f) =>
+      f.type === "currency" ? formatRupiah(row[f.key]) : (row[f.key] ?? "").toString()
+    ),
+  ]);
 
   doc.autoTable({
     startY: y + 12,
@@ -996,7 +1054,7 @@ async function buildRecordPdf(schema, row, { filename, noUrut } = {}) {
 
   const body = schema.fields
     .filter((f) => f.type !== "image")
-    .map((f) => [f.label, (row[f.key] ?? "").toString()]);
+    .map((f) => [f.label, f.type === "currency" ? formatRupiah(row[f.key]) : (row[f.key] ?? "").toString()]);
 
   doc.autoTable({
     startY,
@@ -1100,14 +1158,25 @@ function parseExcelFile(file, schema) {
         const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
         const labelToKey = {};
-        schema.fields.forEach((f) => (labelToKey[normalizeLabel(f.label)] = f.key));
+        const fieldByKey = {};
+        schema.fields.forEach((f) => {
+          labelToKey[normalizeLabel(f.label)] = f.key;
+          fieldByKey[f.key] = f;
+        });
 
         const rows = json
           .map((row) => {
             const mapped = {};
             Object.entries(row).forEach(([label, value]) => {
               const key = labelToKey[normalizeLabel(label)];
-              if (key) mapped[key] = value;
+              if (!key) return;
+              // Kolom harga: terima baik angka polos maupun teks berformat
+              // ("Rp 1.500.000", "1.500.000") dan simpan sebagai angka murni.
+              if (fieldByKey[key].type === "currency") {
+                mapped[key] = parseRupiah(value);
+              } else {
+                mapped[key] = value;
+              }
             });
             return mapped;
           })

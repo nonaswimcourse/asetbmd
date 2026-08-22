@@ -30,9 +30,16 @@ const baseIdentity = [
   { key: "nomor_register", label: "Nomor Register", type: "text" },
 ];
 
+// Membuat salinan sebuah daftar field dengan sebagian labelnya diganti,
+// tanpa mengubah key/type asli (dipakai supaya baseIdentity tetap satu
+// sumber, tapi tiap KIB bisa punya sebutan kolom yang berbeda kalau perlu).
+function withFieldOverrides(fields, overrides) {
+  return fields.map((f) => (overrides[f.key] ? { ...f, ...overrides[f.key] } : f));
+}
+
 const baseTail = [
   { key: "asal_usul", label: "Asal Usul", type: "select", options: ASAL_USUL_OPTIONS },
-  { key: "harga", label: "Harga (Rp)", type: "number" },
+  { key: "harga", label: "Harga (Rp)", type: "currency" },
   { key: "keterangan", label: "Keterangan", type: "textarea" },
   { key: "upb", label: "UPB", type: "text" },
   { key: "intra_ekstra", label: "Intra/Ekstra", type: "select", options: INTRA_EKSTRA_OPTIONS },
@@ -86,8 +93,15 @@ export const KIB_SCHEMAS = {
     // Tidak ada kolom "tahun" tersendiri di KIB C, jadi tahun diambil dari
     // tanggal dokumen (mis. "2024-05-01" -> "2024").
     yearField: "tanggal_dokumen",
+    // Kolom "No Urut" dipakai sebagai "Titik Koordinat" (lokasi GPS gedung),
+    // dan "Kode UPB" dipakai sebagai "Penggunaan" bangunan — jadi bukan
+    // nomor urut otomatis, isian bebas oleh user (lihat noUrutFreeform).
+    noUrutFreeform: true,
     fields: [
-      ...baseIdentity,
+      ...withFieldOverrides(baseIdentity, {
+        no_urut: { label: "Titik Koordinat" },
+        kode_upb: { label: "Penggunaan" },
+      }),
       { key: "kondisi_bangunan", label: "Kondisi Bangunan", type: "select", options: KONDISI_OPTIONS },
       { key: "konstruksi", label: "Konstruksi Bangunan", type: "text" },
       { key: "luas_lantai_m2", label: "Luas Lantai (m²)", type: "number" },
