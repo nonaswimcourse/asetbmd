@@ -18,6 +18,7 @@ let search = "";
 let totalCount = 0;
 let editingRow = null; // record currently in the add/edit modal
 let editingGroupIds = null; // saat mengedit satu grup sekaligus: daftar id unit yang akan ikut diupdate
+let editingOriginalQty = 1; // jumlah unit sebelum diedit (1 untuk edit satuan, jumlah grup untuk edit grup), dipakai untuk mendeteksi penambahan/pengurangan unit saat submit
 let deleteTarget = null;
 let groupedView = true; // tampilan tabel dikelompokkan otomatis berdasarkan Nama Barang
 
@@ -55,6 +56,8 @@ const formCancelBtn = document.getElementById("formCancelBtn");
 const formSaveBtn = document.getElementById("formSaveBtn");
 const batchSection = document.getElementById("batchSection");
 const batchQtyInput = document.getElementById("batchQtyInput");
+const batchSectionLabel = document.getElementById("batchSectionLabel");
+const batchSectionHint = document.getElementById("batchSectionHint");
 
 const confirmModalOverlay = document.getElementById("confirmModalOverlay");
 const confirmMessage = document.getElementById("confirmMessage");
@@ -702,9 +705,36 @@ function openFormModal(record, opts = {}) {
     formGrid.appendChild(wrap);
   });
 
-  // Otomatisasi No. Register (batch) hanya berlaku saat menambah data baru
-  batchQtyInput.value = "1";
-  batchSection.style.display = isEdit || isGroupEdit ? "none" : "block";
+  // Jumlah Unit: dipakai saat Tambah (untuk membuat beberapa unit sekaligus)
+  // maupun saat Edit/Edit Grup (untuk menambah atau mengurangi jumlah unit
+  // yang salah/terlewat diisi sebelumnya). Nilai awal disesuaikan dengan
+  // jumlah unit yang sedang diedit sekarang, supaya user tinggal menaikkan
+  // atau menurunkan angkanya.
+  editingOriginalQty = isGroupEdit ? editingGroupIds.length : 1;
+  batchQtyInput.value = String(editingOriginalQty);
+  batchSection.style.display = "block";
+
+  if (isGroupEdit) {
+    batchSectionLabel.innerHTML = `Jumlah Unit dalam grup ini (saat ini <b>${editingOriginalQty}</b> unit)`;
+    batchSectionHint.innerHTML =
+      `Ubah angka ini untuk menambah atau mengurangi jumlah unit dalam grup. ` +
+      `<b>Menaikkan</b> angka akan membuat unit baru dengan data yang sama, melanjutkan urutan ` +
+      `<b>No Urut</b>/<b>No. Register</b> yang sudah ada. <b>Menurunkan</b> angka akan menghapus ` +
+      `unit paling akhir dalam grup ini (urutan terbesar) — pastikan itu memang unit yang ingin dihapus.`;
+  } else if (isEdit) {
+    batchSectionLabel.textContent = "Jumlah Unit (ubah jika jumlah unit yang diisi sebelumnya salah/terlewat)";
+    batchSectionHint.innerHTML =
+      `Data ini saat ini tercatat sebagai <b>1 unit</b>. Isi lebih dari 1 untuk membuat unit tambahan ` +
+      `dengan data yang sama sebagai satu grup, masing-masing mendapat <b>No Urut</b> dan <b>No. Register</b> ` +
+      `berurutan otomatis mulai dari nilai unit ini.`;
+  } else {
+    batchSectionLabel.innerHTML = "Jumlah Unit (duplikasi otomatis + No Urut &amp; No. Register berurutan)";
+    batchSectionHint.innerHTML =
+      `Isi lebih dari 1 untuk membuat beberapa unit sekaligus dengan data yang sama,
+      masing-masing mendapat <b>No Urut</b> dan <b>No. Register</b> berurutan otomatis
+      (mis. isi <b>10</b> dan No Urut <b>0001</b> → dibuat rentang 0001-0010). Data akan
+      otomatis mengelompok berdasarkan Nama Barang pada tampilan tabel.`;
+  }
 
   formModalOverlay.style.display = "flex";
 }
@@ -793,7 +823,9 @@ assetForm.addEventListener("submit", async (e) => {
 
   const isGroupEdit = Boolean(editingGroupIds && editingGroupIds.length);
   const isEdit = !isGroupEdit && Boolean(editingRow && editingRow.id);
-  const batchQty = isEdit || isGroupEdit ? 1 : Math.max(1, parseInt(batchQtyInput.value, 10) || 1);
+  // Jumlah Unit yang diisi user di form (dipakai untuk Tambah baru, DAN untuk
+  // menambah/mengurangi jumlah unit saat Edit/Edit Grup — lihat cabang di bawah).
+  const newQty = Math.max(1, parseInt(batchQtyInput.value, 10) || 1);
 
   formSaveBtn.textContent = "Menyimpan…";
 
@@ -804,7 +836,13 @@ assetForm.addEventListener("submit", async (e) => {
     // dipakai sebagai nilai AWAL, lalu dibuat berurutan otomatis untuk tiap
     // unit dalam grup (unit ke-1 = nilai awal, unit ke-2 = nilai berikutnya,
     // dst), jadi tiap unit tetap punya No. Register & ID Pemda yang berbeda.
-    const qty = editingGroupIds.length;
+    //
+    // "Jumlah Unit" di form ini juga bisa diubah untuk menambah unit baru
+    // (jika jumlahnya dinaikkan) atau menghapus unit paling akhir dalam grup
+    // (jika jumlahnya diturunkan) — supaya kesalahan/kelalaian jumlah unit
+    // saat input pertama kali bisa diperbaiki tanpa hapus-tambah manual.
+    const oldQty = editingGroupIds.length;
+    const qty = newQty;
     const startReg = payload.nomor_register;
     const startIdPemda = payload.id_pemda;
     const startNoUrut = payload.no_urut;
@@ -815,7 +853,8 @@ assetForm.addEventListener("submit", async (e) => {
     delete payload.id_pemda;
     delete payload.no_urut;
 
-    for (let i = 0; i < editingGroupIds.length; i += 1) {
+    const keepCount = Math.min(oldQty, qty);
+    for (let i = 0; i < keepCount; i += 1) {
       const rowPayload = { ...payload };
       if (newRegs) rowPayload.nomor_register = newRegs[i];
       if (newIdPemda) rowPayload.id_pemda = newIdPemda[i];
@@ -829,13 +868,56 @@ assetForm.addEventListener("submit", async (e) => {
         break;
       }
     }
+
+    if (!error && qty > oldQty) {
+      // Jumlah dinaikkan: tambah unit baru melanjutkan urutan No Urut/No. Register/ID Pemda.
+      const extraRows = [];
+      for (let i = oldQty; i < qty; i += 1) {
+        const rowPayload = { ...payload };
+        if (newRegs) rowPayload.nomor_register = newRegs[i];
+        if (newIdPemda) rowPayload.id_pemda = newIdPemda[i];
+        if (newNoUrut) rowPayload.no_urut = newNoUrut[i];
+        extraRows.push(rowPayload);
+      }
+      ({ error } = await supabase.from(schema.table).insert(extraRows));
+    } else if (!error && qty < oldQty) {
+      // Jumlah diturunkan: hapus unit paling akhir dalam grup (urutan terbesar).
+      const removeIds = editingGroupIds.slice(qty);
+      ({ error } = await supabase.from(schema.table).delete().in("id", removeIds));
+    }
   } else if (isEdit) {
-    ({ error } = await supabase.from(schema.table).update(payload).eq("id", editingRow.id));
-  } else if (batchQty > 1) {
+    if (newQty <= 1) {
+      ({ error } = await supabase.from(schema.table).update(payload).eq("id", editingRow.id));
+    } else {
+      // Jumlah Unit dinaikkan saat edit satu data: data ini jadi unit pertama,
+      // lalu ditambahkan (newQty - 1) unit baru dengan data sama, masing-masing
+      // melanjutkan urutan No Urut/No. Register — sehingga jadi satu grup.
+      const startReg = payload.nomor_register;
+      const startNoUrut = payload.no_urut;
+      const newRegs = startReg ? generateSequentialRegisters(startReg, newQty) : null;
+      const newNoUrut = startNoUrut ? generateSequentialRegisters(startNoUrut, newQty, 4) : null;
+
+      const firstPayload = { ...payload };
+      if (newRegs) firstPayload.nomor_register = newRegs[0];
+      if (newNoUrut) firstPayload.no_urut = newNoUrut[0];
+      ({ error } = await supabase.from(schema.table).update(firstPayload).eq("id", editingRow.id));
+
+      if (!error) {
+        const extraRows = [];
+        for (let i = 1; i < newQty; i += 1) {
+          const rowPayload = { ...payload };
+          if (newRegs) rowPayload.nomor_register = newRegs[i];
+          if (newNoUrut) rowPayload.no_urut = newNoUrut[i];
+          extraRows.push(rowPayload);
+        }
+        ({ error } = await supabase.from(schema.table).insert(extraRows));
+      }
+    }
+  } else if (newQty > 1) {
     // Buat beberapa unit sekaligus dengan data sama, No. Register berurutan otomatis,
     // dan otomatis mengelompok (grup ditentukan dari nama_barang yang sama).
-    const registers = generateSequentialRegisters(payload.nomor_register, batchQty);
-    const noUruts = payload.no_urut ? generateSequentialRegisters(payload.no_urut, batchQty, 4) : null;
+    const registers = generateSequentialRegisters(payload.nomor_register, newQty);
+    const noUruts = payload.no_urut ? generateSequentialRegisters(payload.no_urut, newQty, 4) : null;
     const rows = registers.map((reg, i) => ({
       ...payload,
       nomor_register: reg,
