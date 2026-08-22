@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
   <title>Arsip Aset KIB A-E</title>
   <link rel="stylesheet" href="style.css" />
 
@@ -16,28 +16,49 @@
 
   <!-- LAYAR LOGIN -->
   <div id="loginScreen" class="login-wrap">
-    <form id="loginForm" class="login-card">
-      <h1>Arsip Aset KIB A–E</h1>
-      <p class="muted">Masuk untuk mengelola data inventaris aset daerah.</p>
-      <label>Email</label>
-      <input id="loginEmail" type="email" required placeholder="admin@instansi.go.id" />
-      <label>Password</label>
-      <input id="loginPassword" type="password" required placeholder="••••••••" />
-      <div id="loginError" class="error-box" style="display:none"></div>
-      <button type="submit" id="loginBtn">Masuk</button>
-      <p class="muted small">Belum punya akun? Buat user lewat Supabase Dashboard → Authentication → Users.</p>
-    </form>
+    <div class="login-card">
+      <img class="login-logo" id="loginLogo" src="" alt="Logo SD Negeri Tanjung 03" />
+      <h1>Arsip Aset KIB A&ndash;E</h1>
+      <p class="login-school">SD Negeri Tanjung 03 &middot; Kab. Brebes</p>
+      <p class="muted login-desc">Masuk untuk mengelola data inventaris aset daerah.</p>
+      <form id="loginForm">
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" type="email" required placeholder="admin@instansi.go.id" autocomplete="username" />
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" type="password" required placeholder="••••••••" autocomplete="current-password" />
+        <div id="loginError" class="error-box" style="display:none"></div>
+        <button type="submit" id="loginBtn">Masuk</button>
+      </form>
+      <p class="muted small login-hint">Belum punya akun? Buat user lewat Supabase Dashboard &rarr; Authentication &rarr; Users.</p>
+    </div>
   </div>
 
   <!-- APLIKASI UTAMA -->
   <div id="appShell" class="app-shell" style="display:none">
-    <aside class="sidebar">
+
+    <!-- Topbar mobile: hamburger + brand -->
+    <header class="mobile-topbar">
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Buka menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="mobile-brand">
+        <img class="mobile-brand-logo" id="mobileBrandLogo" src="" alt="" />
+        <span class="mobile-brand-title">Arsip Aset Daerah</span>
+      </div>
+      <div class="mobile-topbar-spacer"></div>
+    </header>
+
+    <!-- Overlay gelap saat sidebar mobile terbuka -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-badge">KIB</div>
+        <img class="brand-logo" id="sidebarLogo" src="" alt="Logo Sekolah" />
         <div>
           <div class="brand-title">Arsip Aset Daerah</div>
-          <div class="brand-sub">Kartu Inventaris Barang</div>
+          <div class="brand-sub">SDN Tanjung 03 &middot; Kartu Inventaris Barang</div>
         </div>
+        <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Tutup menu">✕</button>
       </div>
       <nav class="sidebar-nav" id="sidebarNav"></nav>
       <div class="sidebar-footer">
