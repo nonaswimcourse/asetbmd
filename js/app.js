@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY, PHOTO_BUCKET } from "./config.js";
 import { KIB_SCHEMAS, KIB_LIST, emptyRecord } from "./schemas.js";
-import { BREBES_LOGO_DATA_URL } from "./logo.js";
+import { BREBES_LOGO_DATA_URL, SCHOOL_LOGO_DATA_URL } from "./logo.js";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -61,6 +61,38 @@ const confirmMessage = document.getElementById("confirmMessage");
 const confirmCancelBtn = document.getElementById("confirmCancelBtn");
 const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 
+// Mobile nav (hamburger drawer)
+const hamburgerBtn = document.getElementById("hamburgerBtn");
+const sidebarCloseBtn = document.getElementById("sidebarCloseBtn");
+const sidebarOverlay = document.getElementById("sidebarOverlay");
+const sidebarEl = document.getElementById("sidebar");
+
+// ---------- logo (dipakai di login & sidebar) ----------
+["loginLogo", "sidebarLogo", "mobileBrandLogo"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.src = SCHOOL_LOGO_DATA_URL;
+});
+
+// ---------- mobile drawer nav ----------
+function openMobileSidebar() {
+  sidebarEl.classList.add("open");
+  sidebarOverlay.classList.add("visible");
+  hamburgerBtn.setAttribute("aria-expanded", "true");
+  document.body.classList.add("no-scroll");
+}
+function closeMobileSidebar() {
+  sidebarEl.classList.remove("open");
+  sidebarOverlay.classList.remove("visible");
+  hamburgerBtn.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("no-scroll");
+}
+hamburgerBtn?.addEventListener("click", () => {
+  if (sidebarEl.classList.contains("open")) closeMobileSidebar();
+  else openMobileSidebar();
+});
+sidebarCloseBtn?.addEventListener("click", closeMobileSidebar);
+sidebarOverlay?.addEventListener("click", closeMobileSidebar);
+
 function currentSchema() {
   return KIB_SCHEMAS[activeKibKey];
 }
@@ -80,6 +112,7 @@ supabase.auth.onAuthStateChange((_event, session) => {
 function showLogin() {
   loginScreen.style.display = "flex";
   appShell.style.display = "none";
+  closeMobileSidebar();
 }
 
 function showApp(session) {
@@ -126,6 +159,7 @@ function buildSidebar() {
       searchInput.value = "";
       buildSidebar();
       loadData();
+      closeMobileSidebar();
     });
     sidebarNav.appendChild(btn);
   });
