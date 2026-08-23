@@ -28,6 +28,8 @@ let stikerKibKey = "A";
 let stikerRows = []; // seluruh baris KIB terpilih (dimuat sekali per pilihan KIB)
 let stikerSelectedIds = new Set(); // id baris yang dicentang untuk dicetak
 let stikerSearch = "";
+let stikerFilterJudul = ""; // filter dropdown: nama barang / judul buku persis
+let stikerFilterTahun = ""; // filter dropdown: tahun persis
 const STIKER_LOKASI_STORAGE_KEY = "stiker_nomor_lokasi";
 
 // ---------- DOM refs ----------
@@ -62,6 +64,8 @@ const stikerNavBtn = document.getElementById("stikerNavBtn");
 const stikerKibSelect = document.getElementById("stikerKibSelect");
 const stikerLokasiInput = document.getElementById("stikerLokasiInput");
 const stikerSearchInput = document.getElementById("stikerSearchInput");
+const stikerFilterJudulSelect = document.getElementById("stikerFilterJudul");
+const stikerFilterTahunSelect = document.getElementById("stikerFilterTahun");
 const stikerSelectAllCheckbox = document.getElementById("stikerSelectAllCheckbox");
 const stikerListBody = document.getElementById("stikerListBody");
 const stikerLastColHeader = document.getElementById("stikerLastColHeader");
@@ -1368,7 +1372,21 @@ stikerKibSelect.addEventListener("change", () => {
   stikerSelectedIds = new Set();
   stikerSearch = "";
   stikerSearchInput.value = "";
+  stikerFilterJudul = "";
+  stikerFilterTahun = "";
   loadStikerData();
+});
+
+stikerFilterJudulSelect.addEventListener("change", (e) => {
+  stikerFilterJudul = e.target.value;
+  renderStikerList();
+  updateStikerPreview();
+});
+
+stikerFilterTahunSelect.addEventListener("change", (e) => {
+  stikerFilterTahun = e.target.value;
+  renderStikerList();
+  updateStikerPreview();
 });
 
 stikerLokasiInput.addEventListener("input", () => {
@@ -1410,8 +1428,41 @@ async function loadStikerData() {
   } else {
     stikerRows = data || [];
   }
+  populateStikerFilterOptions(schema);
   renderStikerList();
   updateStikerPreview();
+}
+
+// Mengisi ulang pilihan dropdown "Filter Judul" & "Filter Tahun" berdasarkan
+// nilai unik yang benar-benar ada di data KIB yang sedang dipilih, supaya
+// user tinggal pilih daripada mengetik manual (lebih mudah cari barang).
+function populateStikerFilterOptions(schema) {
+  const judulSet = new Set();
+  const tahunSet = new Set();
+  stikerRows.forEach((row) => {
+    const judul = getStikerDisplayName(row);
+    if (judul && judul !== "-") judulSet.add(judul);
+    const tahun = getRecordYear(schema, row);
+    if (tahun) tahunSet.add(String(tahun));
+  });
+
+  const judulOptions = Array.from(judulSet).sort((a, b) => a.localeCompare(b, "id"));
+  const tahunOptions = Array.from(tahunSet).sort((a, b) => b.localeCompare(a, "id")); // terbaru dulu
+
+  // Kalau nilai filter yang sedang aktif ternyata sudah tidak ada lagi di
+  // data KIB baru ini (mis. ganti KIB), reset ke "Semua" supaya tidak nyangkut.
+  if (stikerFilterJudul && !judulSet.has(stikerFilterJudul)) stikerFilterJudul = "";
+  if (stikerFilterTahun && !tahunSet.has(stikerFilterTahun)) stikerFilterTahun = "";
+
+  stikerFilterJudulSelect.innerHTML =
+    `<option value="">Semua Judul</option>` +
+    judulOptions.map((j) => `<option value="${escapeHtml(j)}">${escapeHtml(j)}</option>`).join("");
+  stikerFilterTahunSelect.innerHTML =
+    `<option value="">Semua Tahun</option>` +
+    tahunOptions.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+
+  stikerFilterJudulSelect.value = stikerFilterJudul;
+  stikerFilterTahunSelect.value = stikerFilterTahun;
 }
 
 // KIB E punya "Judul Buku" — kalau terisi, itu yang dipakai sebagai nama
@@ -1434,13 +1485,20 @@ function stikerLastColValue(schema, row) {
 }
 
 function getStikerFilteredRows() {
+  const schema = KIB_SCHEMAS[stikerKibKey];
   const q = stikerSearch.trim().toLowerCase();
-  if (!q) return stikerRows;
-  return stikerRows.filter((r) =>
-    [r.kode_barang, r.nama_barang, r.judul_buku, r.nomor_register]
-      .filter(Boolean)
-      .some((v) => String(v).toLowerCase().includes(q))
-  );
+
+  return stikerRows.filter((r) => {
+    if (q) {
+      const matchSearch = [r.kode_barang, r.nama_barang, r.judul_buku, r.nomor_register]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
+      if (!matchSearch) return false;
+    }
+    if (stikerFilterJudul && getStikerDisplayName(r) !== stikerFilterJudul) return false;
+    if (stikerFilterTahun && String(getRecordYear(schema, r) || "") !== stikerFilterTahun) return false;
+    return true;
+  });
 }
 
 function renderStikerList() {
