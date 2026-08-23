@@ -259,7 +259,7 @@ tbody tr:hover { background: #f9fafb; }
 .modal-header h2 { margin: 0; font-size: 1.05rem; }
 .icon-btn { background: none; border: none; font-size: 1.1rem; color: var(--text-muted); cursor: pointer; padding: 0.2rem; }
 .icon-btn:hover { color: var(--text); }
-.modal-body { padding: 1.4rem; overflow-y: auto; }
+.modal-body { padding: 1.4rem; overflow-y: auto; overflow-x: auto; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .form-field { display: flex; flex-direction: column; }
 .form-field label { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; color: #374151; }
@@ -403,7 +403,7 @@ tbody tr:hover { background: #f9fafb; }
   outline: none; border-color: var(--brand-blue); box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
 }
 
-.stiker-preview-wrap { margin-bottom: 1.3rem; }
+.stiker-preview-wrap { margin-bottom: 1.3rem; display: flex; justify-content: center; overflow-x: auto; }
 .stiker-check-col { width: 34px; }
 
 .stiker-footer {
@@ -411,12 +411,19 @@ tbody tr:hover { background: #f9fafb; }
 }
 
 /* Kartu pratinjau stiker: meniru persis tata letak stiker fisik yang jadi
-   contoh (logo kiri, judul 3 baris kanan, baris nomor lokasi, baris kode
-   barang, baris judul/nama barang, lalu baris No.Reg / Tahun / Harga),
-   dengan warna latar modern (bukan hitam-putih polos) senada brand. */
+   contoh (logo Kab. Brebes kiri, judul 3 baris tengah, logo sekolah kanan,
+   lalu baris nomor lokasi, kode barang, judul/nama barang, dan baris bawah
+   No.Reg / Tahun / Harga), dengan warna latar modern (bukan hitam-putih
+   polos) senada brand.
+   Lebar kartu SENGAJA dibuat tetap (fixed px, bukan persentase/max-width
+   yang mengikuti lebar layar) supaya tata letak & bungkus baris judul
+   PERSIS SAMA di laptop maupun mobile — sebelumnya lebar kartu mengikuti
+   lebar kontainer sehingga judul bisa membungkus baris berbeda-beda
+   tergantung ukuran layar/kolom grid (terlihat "tidak stabil"). */
 .stiker-card {
-  width: 100%; max-width: 480px; background: #fff; border: 1.5px solid var(--brand-navy);
-  border-radius: 10px; font-family: Arial, Helvetica, sans-serif; overflow: hidden;
+  width: 320px; max-width: 320px; flex: 0 0 320px; background: #fff;
+  border: 1.5px solid var(--brand-navy); border-radius: 10px;
+  font-family: Arial, Helvetica, sans-serif; overflow: hidden;
   box-shadow: var(--shadow-md);
 }
 .stiker-row { display: flex; border-bottom: 1px solid rgba(15, 47, 122, 0.18); }
@@ -426,21 +433,22 @@ tbody tr:hover { background: #f9fafb; }
   background: linear-gradient(135deg, var(--brand-navy), var(--brand-blue) 70%);
   border-bottom: none;
 }
-.stiker-logo-cell {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 74px; box-sizing: border-box;
-  display: flex; align-items: center; justify-content: center;
-  border-right: 1px solid rgba(255,255,255,0.25); padding: 4px;
+.stiker-logo-cell, .stiker-logo-cell-right {
+  position: absolute; top: 0; bottom: 0; width: 58px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; padding: 4px;
 }
-.stiker-logo-cell img {
-  width: 52px; height: 52px; object-fit: contain; background: #fff; border-radius: 50%;
+.stiker-logo-cell { left: 0; border-right: 1px solid rgba(255,255,255,0.25); }
+.stiker-logo-cell-right { right: 0; border-left: 1px solid rgba(255,255,255,0.25); }
+.stiker-logo-cell img, .stiker-logo-cell-right img {
+  width: 44px; height: 44px; object-fit: contain; background: #fff; border-radius: 50%;
   padding: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
-/* Padding kiri-kanan disamakan (selebar sel logo) supaya judul benar-benar
-   center di TENGAH KARTU — sejajar dengan baris Nomor Lokasi & Judul Buku
-   di bawahnya yang juga full-width center — bukan cuma center di ruang
-   kosong sebelah kanan logo. */
+/* Padding kiri-kanan disamakan (selebar sel logo kiri + logo kanan) supaya
+   judul benar-benar center di TENGAH KARTU — sejajar dengan baris Nomor
+   Lokasi & Judul Buku di bawahnya yang juga full-width center — bukan cuma
+   center di ruang kosong di antara kedua logo. */
 .stiker-title-cell {
-  width: 100%; box-sizing: border-box; padding: 0 74px;
+  width: 100%; box-sizing: border-box; padding: 0 58px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
 }
 .stiker-title-cell div { text-align: center; font-weight: 700; font-size: 0.78rem; line-height: 1.35; text-transform: uppercase; color: #fff; }
@@ -462,10 +470,9 @@ tbody tr:hover { background: #f9fafb; }
    satu pratinjau) sebelum dicetak ke PDF, supaya user bisa cek dulu tata
    letak & data tiap stiker, dan masih bisa membatalkan centang dari sini. */
 .stiker-review-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;
+  display: grid; grid-template-columns: repeat(auto-fill, 320px); justify-content: center; gap: 1rem;
 }
-.stiker-review-item { display: flex; flex-direction: column; gap: 0.4rem; }
-.stiker-review-item .stiker-card { max-width: none; }
+.stiker-review-item { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
 .stiker-review-remove {
   align-self: flex-end; background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
   color: var(--text-muted); font-size: 0.75rem; padding: 0.25rem 0.6rem; cursor: pointer;
