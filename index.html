@@ -61,6 +61,12 @@
         <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Tutup menu">✕</button>
       </div>
       <nav class="sidebar-nav" id="sidebarNav"></nav>
+      <div class="sidebar-section-title">Fitur Lain</div>
+      <nav class="sidebar-nav sidebar-nav-extra">
+        <button class="sidebar-item" id="stikerNavBtn">
+          <span class="sidebar-letter">🏷️</span><span>Cetak Stiker</span>
+        </button>
+      </nav>
       <div class="sidebar-footer">
         <div class="muted small" id="userEmailLabel"></div>
         <button class="btn-secondary small" id="logoutBtn">Keluar</button>
@@ -68,37 +74,93 @@
     </aside>
 
     <main class="main-content">
-      <div class="table-header">
-        <div>
-          <h2 id="pageTitle"></h2>
-          <p class="muted" id="pageDesc"></p>
+      <div id="dataView">
+        <div class="table-header">
+          <div>
+            <h2 id="pageTitle"></h2>
+            <p class="muted" id="pageDesc"></p>
+          </div>
+          <div class="toolbar">
+            <input type="text" id="searchInput" class="search-input" placeholder="Cari data…" />
+            <button class="btn-secondary" id="groupToggleBtn">🗂 Tampilan Kelompok: Aktif</button>
+            <button class="btn-primary" id="addBtn">+ Tambah Data</button>
+            <button class="btn-secondary" id="exportExcelBtn">⬇ Excel</button>
+            <button class="btn-secondary" id="exportPdfBtn">⬇ PDF</button>
+            <label class="btn-secondary file-label">
+              ⬆ Impor Excel
+              <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" hidden />
+            </label>
+          </div>
         </div>
-        <div class="toolbar">
-          <input type="text" id="searchInput" class="search-input" placeholder="Cari data…" />
-          <button class="btn-secondary" id="groupToggleBtn">🗂 Tampilan Kelompok: Aktif</button>
-          <button class="btn-primary" id="addBtn">+ Tambah Data</button>
-          <button class="btn-secondary" id="exportExcelBtn">⬇ Excel</button>
-          <button class="btn-secondary" id="exportPdfBtn">⬇ PDF</button>
-          <label class="btn-secondary file-label">
-            ⬆ Impor Excel
-            <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" hidden />
-          </label>
+
+        <div id="errorBox" class="error-box" style="display:none"></div>
+
+        <div class="table-scroll">
+          <table>
+            <thead><tr id="tableHeadRow"></tr></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="pagination" id="pagination">
+          <button id="prevPageBtn">← Sebelumnya</button>
+          <span id="pageInfo"></span>
+          <button id="nextPageBtn">Selanjutnya →</button>
         </div>
       </div>
 
-      <div id="errorBox" class="error-box" style="display:none"></div>
+      <!-- TAMPILAN CETAK STIKER -->
+      <div id="stikerView" style="display:none">
+        <div class="table-header">
+          <div>
+            <h2>Cetak Stiker Aset</h2>
+            <p class="muted">Stiker dibuat otomatis dari data barang. Nomor Lokasi diisi manual (berlaku untuk semua stiker yang dicetak sekaligus).</p>
+          </div>
+        </div>
 
-      <div class="table-scroll">
-        <table>
-          <thead><tr id="tableHeadRow"></tr></thead>
-          <tbody id="tableBody"></tbody>
-        </table>
-      </div>
+        <div class="stiker-controls">
+          <div class="stiker-field">
+            <label for="stikerKibSelect">Pilih KIB</label>
+            <select id="stikerKibSelect"></select>
+          </div>
+          <div class="stiker-field stiker-field-grow">
+            <label for="stikerLokasiInput">Nomor Lokasi (manual)</label>
+            <input type="text" id="stikerLokasiInput" placeholder="cth: 12.11.09.01.01.23.07.42" />
+          </div>
+          <div class="stiker-field stiker-field-grow">
+            <label for="stikerSearchInput">Cari Barang</label>
+            <input type="text" id="stikerSearchInput" placeholder="Cari nama/judul/kode barang…" />
+          </div>
+        </div>
 
-      <div class="pagination" id="pagination">
-        <button id="prevPageBtn">← Sebelumnya</button>
-        <span id="pageInfo"></span>
-        <button id="nextPageBtn">Selanjutnya →</button>
+        <div class="stiker-preview-wrap">
+          <p class="muted small">Pratinjau stiker (data barang pertama yang dipilih):</p>
+          <div class="stiker-card" id="stikerPreview"></div>
+        </div>
+
+        <div id="stikerErrorBox" class="error-box" style="display:none"></div>
+
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th class="stiker-check-col"><input type="checkbox" id="stikerSelectAllCheckbox" /></th>
+                <th>No</th>
+                <th>Kode Barang</th>
+                <th>Nama Barang / Judul</th>
+                <th>No. Register</th>
+                <th>Tahun</th>
+                <th>Harga</th>
+              </tr>
+            </thead>
+            <tbody id="stikerListBody"></tbody>
+          </table>
+        </div>
+
+        <div class="stiker-footer">
+          <span class="muted small" id="stikerSelectedCount">0 barang dipilih</span>
+          <button class="btn-primary" id="stikerGenerateBtn">🖨️ Buat PDF Stiker</button>
+        </div>
       </div>
     </main>
   </div>
