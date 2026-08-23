@@ -421,7 +421,7 @@ tbody tr:hover { background: #f9fafb; }
    lebar kontainer sehingga judul bisa membungkus baris berbeda-beda
    tergantung ukuran layar/kolom grid (terlihat "tidak stabil"). */
 .stiker-card {
-  width: 320px; max-width: 320px; flex: 0 0 320px; background: #fff;
+  width: 320px; max-width: 320px; flex: none; background: #fff;
   border: 1.5px solid var(--brand-navy); border-radius: 10px;
   font-family: Arial, Helvetica, sans-serif; overflow: hidden;
   box-shadow: var(--shadow-md);
