@@ -64,6 +64,7 @@ const stikerLokasiInput = document.getElementById("stikerLokasiInput");
 const stikerSearchInput = document.getElementById("stikerSearchInput");
 const stikerSelectAllCheckbox = document.getElementById("stikerSelectAllCheckbox");
 const stikerListBody = document.getElementById("stikerListBody");
+const stikerLastColHeader = document.getElementById("stikerLastColHeader");
 const stikerErrorBox = document.getElementById("stikerErrorBox");
 const stikerPreview = document.getElementById("stikerPreview");
 const stikerSelectedCount = document.getElementById("stikerSelectedCount");
@@ -1399,6 +1400,7 @@ async function loadStikerData() {
   const schema = KIB_SCHEMAS[stikerKibKey];
   stikerListBody.innerHTML = `<tr><td class="muted center" colspan="7">Memuat data…</td></tr>`;
   stikerErrorBox.style.display = "none";
+  stikerLastColHeader.textContent = stikerHasRuang(schema) ? "Ruang" : "Harga";
 
   const { data, error } = await supabase.from(schema.table).select("*").order("id");
   if (error) {
@@ -1417,6 +1419,18 @@ async function loadStikerData() {
 function getStikerDisplayName(row) {
   if (row.judul_buku && String(row.judul_buku).trim()) return String(row.judul_buku).trim();
   return row.nama_barang || "-";
+}
+
+// Beberapa skema (mis. KIB E - Buku/Perpustakaan) punya field "Ruang" (ruang
+// kelas/lokasi simpan buku), yang lebih berguna dicetak di stiker daripada
+// Harga. Kalau skema punya field ini, stiker & daftar pilihan barang memakai
+// Ruang di kolom terakhir; kalau tidak ada, tetap pakai Harga seperti biasa.
+function stikerHasRuang(schema) {
+  return schema.fields.some((f) => f.key === "ruang");
+}
+
+function stikerLastColValue(schema, row) {
+  return stikerHasRuang(schema) ? row.ruang || "-" : formatRupiah(row.harga) || "-";
 }
 
 function getStikerFilteredRows() {
@@ -1440,7 +1454,7 @@ function renderStikerList() {
       const schema = KIB_SCHEMAS[stikerKibKey];
       const tr = document.createElement("tr");
       const checked = stikerSelectedIds.has(row.id);
-      const harga = formatRupiah(row.harga);
+      const lastColVal = stikerLastColValue(schema, row);
       tr.innerHTML = `
         <td><input type="checkbox" class="stiker-row-check" ${checked ? "checked" : ""} /></td>
         <td>${idx + 1}</td>
@@ -1448,7 +1462,7 @@ function renderStikerList() {
         <td>${escapeHtml(getStikerDisplayName(row))}</td>
         <td>${escapeHtml(row.nomor_register || "-")}</td>
         <td>${escapeHtml(getRecordYear(schema, row) || "-")}</td>
-        <td>${harga ? escapeHtml(harga) : "-"}</td>
+        <td>${escapeHtml(String(lastColVal))}</td>
       `;
       tr.querySelector(".stiker-row-check").addEventListener("change", (e) => {
         if (e.target.checked) stikerSelectedIds.add(row.id);
@@ -1494,7 +1508,7 @@ function renderStikerPreviewHtml(schema, row, nomorLokasi) {
   const namaBarang = getStikerDisplayName(row);
   const noReg = row.nomor_register || "-";
   const tahun = getRecordYear(schema, row) || "-";
-  const harga = formatRupiah(row.harga) || "-";
+  const lastColVal = stikerLastColValue(schema, row);
 
   return `
     <div class="stiker-row stiker-head">
@@ -1511,7 +1525,7 @@ function renderStikerPreviewHtml(schema, row, nomorLokasi) {
     <div class="stiker-row stiker-bottom-row">
       <div class="stiker-bottom-cell">${escapeHtml(String(noReg))}</div>
       <div class="stiker-bottom-cell">${escapeHtml(String(tahun))}</div>
-      <div class="stiker-bottom-cell">${escapeHtml(String(harga))}</div>
+      <div class="stiker-bottom-cell">${escapeHtml(String(lastColVal))}</div>
     </div>
   `;
 }
@@ -1620,15 +1634,20 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
     // kalau logo gagal digambar, stiker tetap dibuat tanpa logo
   }
 
-  const titleCenterX = x + logoW + (w - logoW) / 2;
+  const titleCenterX = x + w / 2;
   const unit = (row.unit_kerja || "").toString().trim().toUpperCase() || "-";
   const titleLines = ["BARANG MILIK DAERAH", "PEMERINTAH KABUPATEN BREBES", unit];
   doc.setFont(undefined, "bold");
   doc.setFontSize(6.2);
   doc.setTextColor(...c.white);
   const lineGap = headerH / (titleLines.length + 0.5);
+  // Lebar teks dibatasi simetris (margin kiri = margin kanan = lebar logo)
+  // supaya judul benar-benar center di TENGAH KARTU — sejajar dengan baris
+  // Nomor Lokasi & Nama Barang/Judul Buku di bawahnya yang juga full-width
+  // center — bukan cuma center di ruang kosong sebelah kanan logo.
+  const titleMaxWidth = w - logoW * 2 - 2;
   titleLines.forEach((t, idx) => {
-    const wrapped = doc.splitTextToSize(t, w - logoW - 3);
+    const wrapped = doc.splitTextToSize(t, titleMaxWidth);
     doc.text(wrapped[0], titleCenterX, y + lineGap * (idx + 0.9), { align: "center" });
   });
 
@@ -1670,11 +1689,11 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   doc.setTextColor(...c.white);
   const noReg = (row.nomor_register || "-").toString();
   const tahun = getRecordYear(schema, row) || "-";
-  const harga = formatRupiah(row.harga) || "-";
+  const lastColVal = String(stikerLastColValue(schema, row));
   const bottomTextY = curY + bottomH / 2 + 1.4;
   doc.text(noReg, x + colW / 2, bottomTextY, { align: "center" });
   doc.text(tahun, x + colW * 1.5, bottomTextY, { align: "center" });
-  doc.text(harga, x + colW * 2.5, bottomTextY, { align: "center" });
+  doc.text(lastColVal, x + colW * 2.5, bottomTextY, { align: "center" });
 
   doc.setFont(undefined, "normal");
   doc.setTextColor(0, 0, 0);

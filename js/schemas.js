@@ -71,6 +71,21 @@ export const KIB_SCHEMAS = {
     title: "KIB B - Peralatan dan Mesin",
     description: "Kartu Inventaris Barang B: Peralatan dan Mesin",
     yearField: "tahun_pembelian",
+    // Kolom yang ditampilkan di tabel depan: identitas dasar ditambah Harga
+    // (tetap ditampilkan seperti sebelumnya) dan Ruang (kolom baru, dipakai
+    // juga oleh fitur Cetak Stiker untuk menggantikan Harga di stiker).
+    displayFields: [
+      "no_urut",
+      "id_pemda",
+      "kode_upb",
+      "unit_kerja",
+      "kecamatan",
+      "kode_barang",
+      "nama_barang",
+      "nomor_register",
+      "harga",
+      "ruang",
+    ],
     fields: [
       ...baseIdentity,
       { key: "merk_type", label: "Merk / Tipe", type: "text" },
@@ -82,6 +97,7 @@ export const KIB_SCHEMAS = {
       { key: "nomor_polisi", label: "Nomor Polisi", type: "text" },
       { key: "nomor_bpkb", label: "Nomor BPKB", type: "text" },
       { key: "kondisi", label: "Kondisi", type: "select", options: KONDISI_OPTIONS },
+      { key: "ruang", label: "Ruang / Lokasi Simpan", type: "text" },
       ...baseTail,
     ],
   },
@@ -151,6 +167,7 @@ export const KIB_SCHEMAS = {
       "jenis_buku",
       "judul_buku",
       "harga",
+      "ruang",
       "tahun",
       "kondisi",
     ],
@@ -173,6 +190,7 @@ export const KIB_SCHEMAS = {
       { key: "jumlah", label: "Jumlah", type: "number" },
       { key: "tahun", label: "Tahun Cetak/Pembelian", type: "number" },
       { key: "kondisi", label: "Kondisi", type: "select", options: KONDISI_OPTIONS },
+      { key: "ruang", label: "Ruang / Lokasi Simpan", type: "text" },
       ...baseTail,
     ],
   },
