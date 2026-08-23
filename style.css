@@ -199,6 +199,9 @@ button, .file-label {
 .btn-primary:hover { background: var(--brand-blue-dark); }
 .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border) !important; }
 .btn-secondary:hover { background: #f3f4f6; }
+.btn-primary:disabled, .btn-secondary:disabled {
+  opacity: 0.5; cursor: not-allowed; box-shadow: none; pointer-events: none;
+}
 .btn-danger { background: var(--brand-red); color: white; }
 .btn-danger:hover { background: #b91c1c; }
 .file-label { background: var(--surface); border: 1px solid var(--border); display: inline-flex; align-items: center; }
