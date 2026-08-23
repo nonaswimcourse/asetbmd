@@ -419,9 +419,12 @@ tbody tr:hover { background: #f9fafb; }
    yang mengikuti lebar layar) supaya tata letak & bungkus baris judul
    PERSIS SAMA di laptop maupun mobile — sebelumnya lebar kartu mengikuti
    lebar kontainer sehingga judul bisa membungkus baris berbeda-beda
-   tergantung ukuran layar/kolom grid (terlihat "tidak stabil"). */
+   tergantung ukuran layar/kolom grid (terlihat "tidak stabil").
+   Lebar 350px + sel logo yang diperkecil (46px) sengaja dipilih supaya baris
+   "PEMERINTAH KABUPATEN BREBES" muat dalam SATU baris (tidak terpotong ke
+   baris berikutnya). */
 .stiker-card {
-  width: 320px; max-width: 320px; flex: none; background: #fff;
+  width: 350px; max-width: 350px; flex: none; background: #fff;
   border: 1.5px solid var(--brand-navy); border-radius: 10px;
   font-family: Arial, Helvetica, sans-serif; overflow: hidden;
   box-shadow: var(--shadow-md);
@@ -434,13 +437,13 @@ tbody tr:hover { background: #f9fafb; }
   border-bottom: none;
 }
 .stiker-logo-cell, .stiker-logo-cell-right {
-  position: absolute; top: 0; bottom: 0; width: 58px; box-sizing: border-box;
-  display: flex; align-items: center; justify-content: center; padding: 4px;
+  position: absolute; top: 0; bottom: 0; width: 46px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; padding: 3px;
 }
 .stiker-logo-cell { left: 0; border-right: 1px solid rgba(255,255,255,0.25); }
 .stiker-logo-cell-right { right: 0; border-left: 1px solid rgba(255,255,255,0.25); }
 .stiker-logo-cell img, .stiker-logo-cell-right img {
-  width: 44px; height: 44px; object-fit: contain; background: #fff; border-radius: 50%;
+  width: 38px; height: 38px; object-fit: contain; background: #fff; border-radius: 50%;
   padding: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
 /* Padding kiri-kanan disamakan (selebar sel logo kiri + logo kanan) supaya
@@ -448,10 +451,19 @@ tbody tr:hover { background: #f9fafb; }
    Lokasi & Judul Buku di bawahnya yang juga full-width center — bukan cuma
    center di ruang kosong di antara kedua logo. */
 .stiker-title-cell {
-  width: 100%; box-sizing: border-box; padding: 0 58px;
+  width: 100%; box-sizing: border-box; padding: 0 46px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
 }
-.stiker-title-cell div { text-align: center; font-weight: 700; font-size: 0.78rem; line-height: 1.35; text-transform: uppercase; color: #fff; }
+.stiker-title-cell div {
+  text-align: center; font-weight: 700; font-size: 0.76rem; line-height: 1.35;
+  text-transform: uppercase; color: #fff;
+}
+/* "Barang Milik Daerah" & "Pemerintah Kabupaten Brebes" adalah teks tetap
+   (bukan data dinamis) — dipaksa satu baris karena lebar kartu di atas
+   sudah dihitung supaya cukup. Baris unit/sekolah TIDAK dipaksa nowrap
+   karena namanya dinamis (bisa lebih panjang dari sekolah lain), supaya
+   tetap membungkus rapi daripada terpotong kalau kepanjangan. */
+.stiker-title-fixed { white-space: nowrap; }
 .stiker-line { padding: 5px 8px; font-size: 0.8rem; font-weight: 700; text-align: center; color: var(--brand-navy); }
 .stiker-line-small { font-size: 0.72rem; font-weight: 500; color: #334155; }
 .stiker-row:nth-child(2) .stiker-line { background: #e0e7fa; }
@@ -470,7 +482,7 @@ tbody tr:hover { background: #f9fafb; }
    satu pratinjau) sebelum dicetak ke PDF, supaya user bisa cek dulu tata
    letak & data tiap stiker, dan masih bisa membatalkan centang dari sini. */
 .stiker-review-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, 320px); justify-content: center; gap: 1rem;
+  display: grid; grid-template-columns: repeat(auto-fill, 350px); justify-content: center; gap: 1rem;
 }
 .stiker-review-item { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
 .stiker-review-remove {
