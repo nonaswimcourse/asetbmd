@@ -240,6 +240,7 @@ tbody tr:hover { background: #f9fafb; }
   display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-lg);
   animation: modal-in 0.2s ease;
 }
+.modal-card-wide { max-width: 960px; }
 .confirm-card {
   background: var(--surface); border-radius: var(--radius-md); width: 100%; max-width: 380px; padding: 1.5rem;
   box-shadow: var(--shadow-lg); animation: modal-in 0.2s ease;
@@ -453,6 +454,21 @@ tbody tr:hover { background: #f9fafb; }
 .stiker-empty-hint {
   padding: 1.4rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;
 }
+
+/* Grid review: menampilkan semua stiker yang tercentang sekaligus (bukan cuma
+   satu pratinjau) sebelum dicetak ke PDF, supaya user bisa cek dulu tata
+   letak & data tiap stiker, dan masih bisa membatalkan centang dari sini. */
+.stiker-review-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;
+}
+.stiker-review-item { display: flex; flex-direction: column; gap: 0.4rem; }
+.stiker-review-item .stiker-card { max-width: none; }
+.stiker-review-remove {
+  align-self: flex-end; background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-muted); font-size: 0.75rem; padding: 0.25rem 0.6rem; cursor: pointer;
+}
+.stiker-review-remove:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+.stiker-review-empty { padding: 2rem; text-align: center; color: var(--text-muted); }
 
 @media (max-width: 900px) {
   .stiker-controls { flex-direction: column; }

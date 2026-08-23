@@ -167,10 +167,28 @@
 
         <div class="stiker-footer">
           <span class="muted small" id="stikerSelectedCount">0 barang dipilih</span>
+          <button class="btn-secondary" id="stikerReviewBtn">👁️ Review Stiker</button>
           <button class="btn-primary" id="stikerGenerateBtn">🖨️ Buat PDF Stiker</button>
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- MODAL REVIEW STIKER (pratinjau semua stiker terpilih sebelum dicetak) -->
+  <div id="stikerReviewModalOverlay" class="modal-overlay" style="display:none">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <h2>Review Stiker (<span id="stikerReviewCount">0</span> barang)</h2>
+        <button class="icon-btn" id="stikerReviewModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="stiker-review-grid" id="stikerReviewGrid"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" id="stikerReviewCloseBtn">Tutup</button>
+        <button type="button" class="btn-primary" id="stikerReviewPrintBtn">🖨️ Buat PDF Stiker</button>
+      </div>
+    </div>
   </div>
 
   <!-- MODAL TAMBAH/EDIT -->
