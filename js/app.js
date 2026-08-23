@@ -1647,6 +1647,7 @@ function renderStikerPreviewHtml(schema, row, nomorLokasi) {
         <div>Pemerintah Kabupaten Brebes</div>
         <div>${escapeHtml(unit)}</div>
       </div>
+      <div class="stiker-logo-cell-right"><img src="${SCHOOL_LOGO_DATA_URL}" alt="Logo SDN Tanjung 03" /></div>
     </div>
     <div class="stiker-row"><div class="stiker-line" style="flex:1">${escapeHtml(String(nomorLokasi || "-"))}</div></div>
     <div class="stiker-row"><div class="stiker-line" style="flex:1">${escapeHtml(String(kodeBarang))}</div></div>
@@ -1738,29 +1739,39 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   doc.setLineWidth(0.3);
   doc.rect(x, y, w, h);
 
-  // --- baris header: logo kiri (di atas bidang putih bulat) + judul 3 baris kanan ---
+  // --- baris header: logo Kab. Brebes kiri + judul 3 baris tengah + logo
+  // sekolah (SDN Tanjung 03) kanan, keduanya di atas bidang putih bulat ---
   const logoW = w * 0.22;
   doc.setDrawColor(255, 255, 255);
   doc.setLineWidth(0.2);
   doc.line(x + logoW, y, x + logoW, y + headerH);
+  doc.line(x + w - logoW, y, x + w - logoW, y + headerH);
   doc.setDrawColor(...c.border);
   doc.setLineWidth(0.3);
   doc.line(x, y + headerH, x + w, y + headerH);
+  // Logo harus muat persis di dalam sel logo (lebar logoW x tinggi headerH),
+  // jadi ukurannya dibatasi oleh sisi TERKECIL dari sel itu (bukan cuma
+  // lebar) supaya tidak meluber ke luar garis kop / baris di bawahnya.
+  // Ditambah lingkaran putih di belakang logo supaya logo tetap kontras
+  // di atas latar navy (bukan cuma nempel polos).
+  const logoPad = 1.2;
+  const logoSize = Math.min(logoW, headerH) - logoPad * 2;
+  const logoY = y + (headerH - logoSize) / 2;
   try {
-    // Logo harus muat persis di dalam sel logo (lebar logoW x tinggi headerH),
-    // jadi ukurannya dibatasi oleh sisi TERKECIL dari sel itu (bukan cuma
-    // lebar) supaya tidak meluber ke luar garis kop / baris di bawahnya.
-    // Ditambah lingkaran putih di belakang logo supaya logo tetap kontras
-    // di atas latar navy (bukan cuma nempel polos).
-    const logoPad = 1.2;
-    const logoSize = Math.min(logoW, headerH) - logoPad * 2;
     const logoX = x + (logoW - logoSize) / 2;
-    const logoY = y + (headerH - logoSize) / 2;
     doc.setFillColor(...c.white);
     doc.circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2 + 0.6, "F");
     doc.addImage(BREBES_LOGO_DATA_URL, "PNG", logoX, logoY, logoSize, logoSize);
   } catch {
     // kalau logo gagal digambar, stiker tetap dibuat tanpa logo
+  }
+  try {
+    const logoXRight = x + w - logoW + (logoW - logoSize) / 2;
+    doc.setFillColor(...c.white);
+    doc.circle(logoXRight + logoSize / 2, logoY + logoSize / 2, logoSize / 2 + 0.6, "F");
+    doc.addImage(SCHOOL_LOGO_DATA_URL, "PNG", logoXRight, logoY, logoSize, logoSize);
+  } catch {
+    // kalau logo sekolah gagal digambar, stiker tetap dibuat tanpa logo kanan
   }
 
   const titleCenterX = x + w / 2;
