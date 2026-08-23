@@ -1553,8 +1553,13 @@ function getStikerFilteredRows() {
   const q = stikerSearch.trim().toLowerCase();
 
   return stikerRows.filter((r) => {
+    // "Cari Kode / No. Register" sengaja hanya mencocokkan dua kolom ini —
+    // judul/nama barang sudah punya jalur sendiri lewat dropdown "Filter
+    // Judul" (exact match, tinggal pilih), jadi tidak perlu dobel di sini.
+    // Kode Barang & No. Register jumlahnya banyak & bervariasi, lebih cocok
+    // dicari lewat teks bebas daripada dropdown.
     if (q) {
-      const matchSearch = [r.kode_barang, r.nama_barang, r.judul_buku, r.nomor_register]
+      const matchSearch = [r.kode_barang, r.nomor_register]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
       if (!matchSearch) return false;
@@ -1607,6 +1612,8 @@ function updateStikerSelectAllState(filtered) {
 
 function updateStikerCount() {
   stikerSelectedCount.textContent = `${stikerSelectedIds.size} barang dipilih`;
+  stikerReviewBtn.disabled = stikerSelectedIds.size === 0;
+  stikerGenerateBtn.disabled = stikerSelectedIds.size === 0;
 }
 
 // Pratinjau memakai barang pertama yang sudah dicentang; kalau belum ada
