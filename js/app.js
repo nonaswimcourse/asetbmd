@@ -1557,23 +1557,65 @@ async function generateStikerPdf() {
   doc.save(`stiker_kib_${schema.key.toLowerCase()}.pdf`);
 }
 
+// Palet warna stiker (modern, senada dengan warna brand di style.css:
+// navy/biru tua untuk kop & footer, biru muda untuk baris info, abu-abu
+// lembut untuk baris nama barang) supaya stiker tidak polos hitam-putih.
+const STIKER_COLORS = {
+  navy: [15, 47, 122], // kop (header)
+  blue: [29, 78, 216], // baris bawah (No.Reg/Tahun/Harga)
+  lokasiTint: [224, 231, 250], // baris Nomor Lokasi
+  kodeTint: [255, 255, 255], // baris Kode Barang
+  namaTint: [241, 245, 249], // baris Nama Barang
+  border: [15, 47, 122],
+  white: [255, 255, 255],
+};
+
 function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   const headerH = h * 0.26;
   const lokasiH = h * 0.15;
   const kodeH = h * 0.15;
   const namaH = h * 0.2;
   const bottomH = h - headerH - lokasiH - kodeH - namaH;
+  const c = STIKER_COLORS;
 
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.25);
+  // --- latar belakang tiap baris (diisi dulu sebelum garis & teks) ---
+  doc.setFillColor(...c.navy);
+  doc.rect(x, y, w, headerH, "F");
+  doc.setFillColor(...c.lokasiTint);
+  doc.rect(x, y + headerH, w, lokasiH, "F");
+  doc.setFillColor(...c.kodeTint);
+  doc.rect(x, y + headerH + lokasiH, w, kodeH, "F");
+  doc.setFillColor(...c.namaTint);
+  doc.rect(x, y + headerH + lokasiH + kodeH, w, namaH, "F");
+  doc.setFillColor(...c.blue);
+  doc.rect(x, y + headerH + lokasiH + kodeH + namaH, w, bottomH, "F");
+
+  // --- bingkai & garis pembatas (navy, lebih halus dari hitam pekat) ---
+  doc.setDrawColor(...c.border);
+  doc.setLineWidth(0.3);
   doc.rect(x, y, w, h);
 
-  // --- baris header: logo kiri + judul 3 baris kanan ---
+  // --- baris header: logo kiri (di atas bidang putih bulat) + judul 3 baris kanan ---
   const logoW = w * 0.22;
+  doc.setDrawColor(255, 255, 255);
+  doc.setLineWidth(0.2);
   doc.line(x + logoW, y, x + logoW, y + headerH);
+  doc.setDrawColor(...c.border);
+  doc.setLineWidth(0.3);
   doc.line(x, y + headerH, x + w, y + headerH);
   try {
-    doc.addImage(BREBES_LOGO_DATA_URL, "PNG", x + 1.2, y + (headerH - (logoW - 2.4)) / 2, logoW - 2.4, logoW - 2.4);
+    // Logo harus muat persis di dalam sel logo (lebar logoW x tinggi headerH),
+    // jadi ukurannya dibatasi oleh sisi TERKECIL dari sel itu (bukan cuma
+    // lebar) supaya tidak meluber ke luar garis kop / baris di bawahnya.
+    // Ditambah lingkaran putih di belakang logo supaya logo tetap kontras
+    // di atas latar navy (bukan cuma nempel polos).
+    const logoPad = 1.2;
+    const logoSize = Math.min(logoW, headerH) - logoPad * 2;
+    const logoX = x + (logoW - logoSize) / 2;
+    const logoY = y + (headerH - logoSize) / 2;
+    doc.setFillColor(...c.white);
+    doc.circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2 + 0.6, "F");
+    doc.addImage(BREBES_LOGO_DATA_URL, "PNG", logoX, logoY, logoSize, logoSize);
   } catch {
     // kalau logo gagal digambar, stiker tetap dibuat tanpa logo
   }
@@ -1583,6 +1625,7 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   const titleLines = ["BARANG MILIK DAERAH", "PEMERINTAH KABUPATEN BREBES", unit];
   doc.setFont(undefined, "bold");
   doc.setFontSize(6.2);
+  doc.setTextColor(...c.white);
   const lineGap = headerH / (titleLines.length + 0.5);
   titleLines.forEach((t, idx) => {
     const wrapped = doc.splitTextToSize(t, w - logoW - 3);
@@ -1591,8 +1634,10 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
 
   // --- baris Nomor Lokasi ---
   let curY = y + headerH;
+  doc.setDrawColor(...c.border);
   doc.line(x, curY + lokasiH, x + w, curY + lokasiH);
   doc.setFontSize(7);
+  doc.setTextColor(...c.navy);
   doc.text(nomorLokasi || "-", x + w / 2, curY + lokasiH / 2 + 1.2, { align: "center" });
 
   // --- baris Kode Barang ---
@@ -1605,6 +1650,7 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   doc.line(x, curY + namaH, x + w, curY + namaH);
   doc.setFont(undefined, "normal");
   doc.setFontSize(6.3);
+  doc.setTextColor(51, 65, 85);
   const namaBarang = getStikerDisplayName(row);
   const namaWrapped = doc.splitTextToSize(namaBarang, w - 4).slice(0, 2);
   const namaLineH = namaH / (namaWrapped.length + 0.6);
@@ -1615,10 +1661,13 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   // --- baris bawah: No. Register | Tahun | Harga ---
   curY += namaH;
   const colW = w / 3;
+  doc.setDrawColor(255, 255, 255);
+  doc.setLineWidth(0.2);
   doc.line(x + colW, curY, x + colW, curY + bottomH);
   doc.line(x + colW * 2, curY, x + colW * 2, curY + bottomH);
   doc.setFont(undefined, "bold");
   doc.setFontSize(7.3);
+  doc.setTextColor(...c.white);
   const noReg = (row.nomor_register || "-").toString();
   const tahun = getRecordYear(schema, row) || "-";
   const harga = formatRupiah(row.harga) || "-";
@@ -1628,4 +1677,5 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   doc.text(harga, x + colW * 2.5, bottomTextY, { align: "center" });
 
   doc.setFont(undefined, "normal");
+  doc.setTextColor(0, 0, 0);
 }
