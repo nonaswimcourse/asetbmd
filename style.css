@@ -403,7 +403,12 @@ tbody tr:hover { background: #f9fafb; }
   outline: none; border-color: var(--brand-blue); box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
 }
 
-.stiker-preview-wrap { margin-bottom: 1.3rem; display: flex; justify-content: center; overflow-x: auto; }
+.stiker-preview-wrap { margin-bottom: 1.3rem; overflow-x: auto; }
+/* Card di-center sendiri (bukan lewat flex pada wrap) supaya label teks
+   "Pratinjau stiker..." di atasnya tetap di baris sendiri dan tidak ikut
+   masuk hitungan centering — sebelumnya label & kartu ditengahkan sebagai
+   satu grup sehingga kartu terlihat condong ke kanan. */
+.stiker-preview-wrap > .stiker-card { margin: 0 auto; }
 .stiker-check-col { width: 34px; }
 
 .stiker-footer {
