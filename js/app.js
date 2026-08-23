@@ -1643,8 +1643,8 @@ function renderStikerPreviewHtml(schema, row, nomorLokasi) {
     <div class="stiker-row stiker-head">
       <div class="stiker-logo-cell"><img src="${BREBES_LOGO_DATA_URL}" alt="Logo Kabupaten Brebes" /></div>
       <div class="stiker-title-cell">
-        <div>Barang Milik Daerah</div>
-        <div>Pemerintah Kabupaten Brebes</div>
+        <div class="stiker-title-fixed">Barang Milik Daerah</div>
+        <div class="stiker-title-fixed">Pemerintah Kabupaten Brebes</div>
         <div>${escapeHtml(unit)}</div>
       </div>
       <div class="stiker-logo-cell-right"><img src="${SCHOOL_LOGO_DATA_URL}" alt="Logo SDN Tanjung 03" /></div>
