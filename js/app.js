@@ -13,6 +13,7 @@ let pendingPhotoFiles = {};
 
 // ---------- state ----------
 let activeKibKey = "A";
+let currentView = "data"; // "data" | "stiker"
 let page = 0;
 let search = "";
 let totalCount = 0;
@@ -21,6 +22,13 @@ let editingGroupIds = null; // saat mengedit satu grup sekaligus: daftar id unit
 let editingOriginalQty = 1; // jumlah unit sebelum diedit (1 untuk edit satuan, jumlah grup untuk edit grup), dipakai untuk mendeteksi penambahan/pengurangan unit saat submit
 let deleteTarget = null;
 let groupedView = true; // tampilan tabel dikelompokkan otomatis berdasarkan Nama Barang
+
+// ---------- state: cetak stiker ----------
+let stikerKibKey = "A";
+let stikerRows = []; // seluruh baris KIB terpilih (dimuat sekali per pilihan KIB)
+let stikerSelectedIds = new Set(); // id baris yang dicentang untuk dicetak
+let stikerSearch = "";
+const STIKER_LOKASI_STORAGE_KEY = "stiker_nomor_lokasi";
 
 // ---------- DOM refs ----------
 const loginScreen = document.getElementById("loginScreen");
@@ -46,6 +54,20 @@ const prevPageBtn = document.getElementById("prevPageBtn");
 const nextPageBtn = document.getElementById("nextPageBtn");
 const pageInfo = document.getElementById("pageInfo");
 const pagination = document.getElementById("pagination");
+
+// Cetak Stiker
+const dataView = document.getElementById("dataView");
+const stikerView = document.getElementById("stikerView");
+const stikerNavBtn = document.getElementById("stikerNavBtn");
+const stikerKibSelect = document.getElementById("stikerKibSelect");
+const stikerLokasiInput = document.getElementById("stikerLokasiInput");
+const stikerSearchInput = document.getElementById("stikerSearchInput");
+const stikerSelectAllCheckbox = document.getElementById("stikerSelectAllCheckbox");
+const stikerListBody = document.getElementById("stikerListBody");
+const stikerErrorBox = document.getElementById("stikerErrorBox");
+const stikerPreview = document.getElementById("stikerPreview");
+const stikerSelectedCount = document.getElementById("stikerSelectedCount");
+const stikerGenerateBtn = document.getElementById("stikerGenerateBtn");
 
 const formModalOverlay = document.getElementById("formModalOverlay");
 const formModalTitle = document.getElementById("formModalTitle");
@@ -151,7 +173,7 @@ function buildSidebar() {
   sidebarNav.innerHTML = "";
   KIB_LIST.forEach((s) => {
     const btn = document.createElement("button");
-    btn.className = "sidebar-item" + (s.key === activeKibKey ? " active" : "");
+    btn.className = "sidebar-item" + (currentView === "data" && s.key === activeKibKey ? " active" : "");
     btn.innerHTML = `<span class="sidebar-letter">${s.key}</span><span>${s.title.replace(
       `KIB ${s.key} - `,
       ""
@@ -161,6 +183,7 @@ function buildSidebar() {
       page = 0;
       search = "";
       searchInput.value = "";
+      showDataView();
       buildSidebar();
       updateGroupToggleVisibility();
       loadData();
@@ -168,7 +191,27 @@ function buildSidebar() {
     });
     sidebarNav.appendChild(btn);
   });
+  stikerNavBtn.classList.toggle("active", currentView === "stiker");
 }
+
+// ================= VIEW SWITCHING (Data <-> Cetak Stiker) =================
+
+function showDataView() {
+  currentView = "data";
+  dataView.style.display = "";
+  stikerView.style.display = "none";
+}
+
+function showStikerView() {
+  currentView = "stiker";
+  dataView.style.display = "none";
+  stikerView.style.display = "";
+  buildSidebar();
+  closeMobileSidebar();
+  initStikerView();
+}
+
+stikerNavBtn.addEventListener("click", showStikerView);
 
 // KIB C tidak memakai sistem pengelompokan otomatis (data KIB C berbasis
 // gedung/bangunan per unit, bukan kumpulan barang sejenis seperti KIB
@@ -1285,4 +1328,304 @@ function parseExcelFile(file, schema) {
     reader.onerror = reject;
     reader.readAsBinaryString(file);
   });
+}
+
+// ================= CETAK STIKER =================
+// Fitur stiker: menu terpisah dari tabel data biasa. User memilih KIB,
+// mencentang barang yang mau dicetak stikernya, lalu isi "Nomor Lokasi"
+// secara manual (berlaku sama untuk semua stiker yang dicetak sekaligus,
+// karena nomor lokasi mewakili lokasi unit kerja, bukan per barang).
+// Semua data lain (Kode Barang, Nama Barang/Judul, No. Register, Tahun,
+// Harga) diambil otomatis dari data barang yang sudah tersimpan.
+
+function populateStikerKibSelect() {
+  if (stikerKibSelect.options.length > 0) return;
+  KIB_LIST.forEach((s) => {
+    const opt = document.createElement("option");
+    opt.value = s.key;
+    opt.textContent = s.title;
+    stikerKibSelect.appendChild(opt);
+  });
+}
+
+function initStikerView() {
+  populateStikerKibSelect();
+  stikerKibSelect.value = stikerKibKey;
+  if (!stikerLokasiInput.value) {
+    stikerLokasiInput.value = localStorage.getItem(STIKER_LOKASI_STORAGE_KEY) || "";
+  }
+  if (stikerRows.length === 0) {
+    loadStikerData();
+  } else {
+    renderStikerList();
+    updateStikerPreview();
+  }
+}
+
+stikerKibSelect.addEventListener("change", () => {
+  stikerKibKey = stikerKibSelect.value;
+  stikerSelectedIds = new Set();
+  stikerSearch = "";
+  stikerSearchInput.value = "";
+  loadStikerData();
+});
+
+stikerLokasiInput.addEventListener("input", () => {
+  localStorage.setItem(STIKER_LOKASI_STORAGE_KEY, stikerLokasiInput.value);
+  updateStikerPreview();
+});
+
+let stikerSearchTimer = null;
+stikerSearchInput.addEventListener("input", (e) => {
+  stikerSearch = e.target.value;
+  clearTimeout(stikerSearchTimer);
+  stikerSearchTimer = setTimeout(renderStikerList, 250);
+});
+
+stikerSelectAllCheckbox.addEventListener("change", () => {
+  const filtered = getStikerFilteredRows();
+  if (stikerSelectAllCheckbox.checked) {
+    filtered.forEach((r) => stikerSelectedIds.add(r.id));
+  } else {
+    filtered.forEach((r) => stikerSelectedIds.delete(r.id));
+  }
+  renderStikerList();
+  updateStikerPreview();
+});
+
+stikerGenerateBtn.addEventListener("click", generateStikerPdf);
+
+async function loadStikerData() {
+  const schema = KIB_SCHEMAS[stikerKibKey];
+  stikerListBody.innerHTML = `<tr><td class="muted center" colspan="7">Memuat data…</td></tr>`;
+  stikerErrorBox.style.display = "none";
+
+  const { data, error } = await supabase.from(schema.table).select("*").order("id");
+  if (error) {
+    stikerErrorBox.textContent = error.message;
+    stikerErrorBox.style.display = "block";
+    stikerRows = [];
+  } else {
+    stikerRows = data || [];
+  }
+  renderStikerList();
+  updateStikerPreview();
+}
+
+// KIB E punya "Judul Buku" — kalau terisi, itu yang dipakai sebagai nama
+// barang di stiker (lebih spesifik). KIB lain / kalau kosong, pakai Nama Barang.
+function getStikerDisplayName(row) {
+  if (row.judul_buku && String(row.judul_buku).trim()) return String(row.judul_buku).trim();
+  return row.nama_barang || "-";
+}
+
+function getStikerFilteredRows() {
+  const q = stikerSearch.trim().toLowerCase();
+  if (!q) return stikerRows;
+  return stikerRows.filter((r) =>
+    [r.kode_barang, r.nama_barang, r.judul_buku, r.nomor_register]
+      .filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(q))
+  );
+}
+
+function renderStikerList() {
+  const filtered = getStikerFilteredRows();
+
+  if (filtered.length === 0) {
+    stikerListBody.innerHTML = `<tr><td class="muted center" colspan="7">Tidak ada data.</td></tr>`;
+  } else {
+    stikerListBody.innerHTML = "";
+    filtered.forEach((row, idx) => {
+      const schema = KIB_SCHEMAS[stikerKibKey];
+      const tr = document.createElement("tr");
+      const checked = stikerSelectedIds.has(row.id);
+      const harga = formatRupiah(row.harga);
+      tr.innerHTML = `
+        <td><input type="checkbox" class="stiker-row-check" ${checked ? "checked" : ""} /></td>
+        <td>${idx + 1}</td>
+        <td>${escapeHtml(row.kode_barang || "-")}</td>
+        <td>${escapeHtml(getStikerDisplayName(row))}</td>
+        <td>${escapeHtml(row.nomor_register || "-")}</td>
+        <td>${escapeHtml(getRecordYear(schema, row) || "-")}</td>
+        <td>${harga ? escapeHtml(harga) : "-"}</td>
+      `;
+      tr.querySelector(".stiker-row-check").addEventListener("change", (e) => {
+        if (e.target.checked) stikerSelectedIds.add(row.id);
+        else stikerSelectedIds.delete(row.id);
+        updateStikerSelectAllState(filtered);
+        updateStikerCount();
+        updateStikerPreview();
+      });
+      stikerListBody.appendChild(tr);
+    });
+  }
+
+  updateStikerSelectAllState(filtered);
+  updateStikerCount();
+}
+
+function updateStikerSelectAllState(filtered) {
+  stikerSelectAllCheckbox.checked = filtered.length > 0 && filtered.every((r) => stikerSelectedIds.has(r.id));
+}
+
+function updateStikerCount() {
+  stikerSelectedCount.textContent = `${stikerSelectedIds.size} barang dipilih`;
+}
+
+// Pratinjau memakai barang pertama yang sudah dicentang; kalau belum ada
+// yang dicentang, pakai barang pertama yang tampil di daftar (biar user
+// langsung lihat contoh tata letak stiker sebelum memilih).
+function updateStikerPreview() {
+  const schema = KIB_SCHEMAS[stikerKibKey];
+  const filtered = getStikerFilteredRows();
+  const previewRow = filtered.find((r) => stikerSelectedIds.has(r.id)) || filtered[0];
+
+  if (!previewRow) {
+    stikerPreview.innerHTML = `<div class="stiker-empty-hint">Belum ada data untuk dijadikan pratinjau.</div>`;
+    return;
+  }
+  stikerPreview.innerHTML = renderStikerPreviewHtml(schema, previewRow, stikerLokasiInput.value.trim());
+}
+
+function renderStikerPreviewHtml(schema, row, nomorLokasi) {
+  const unit = (row.unit_kerja || "").toString().trim().toUpperCase() || "-";
+  const kodeBarang = row.kode_barang || "-";
+  const namaBarang = getStikerDisplayName(row);
+  const noReg = row.nomor_register || "-";
+  const tahun = getRecordYear(schema, row) || "-";
+  const harga = formatRupiah(row.harga) || "-";
+
+  return `
+    <div class="stiker-row stiker-head">
+      <div class="stiker-logo-cell"><img src="${BREBES_LOGO_DATA_URL}" alt="Logo Kabupaten Brebes" /></div>
+      <div class="stiker-title-cell">
+        <div>Barang Milik Daerah</div>
+        <div>Pemerintah Kabupaten Brebes</div>
+        <div>${escapeHtml(unit)}</div>
+      </div>
+    </div>
+    <div class="stiker-row"><div class="stiker-line" style="flex:1">${escapeHtml(String(nomorLokasi || "-"))}</div></div>
+    <div class="stiker-row"><div class="stiker-line" style="flex:1">${escapeHtml(String(kodeBarang))}</div></div>
+    <div class="stiker-row"><div class="stiker-line stiker-line-small" style="flex:1">${escapeHtml(namaBarang)}</div></div>
+    <div class="stiker-row stiker-bottom-row">
+      <div class="stiker-bottom-cell">${escapeHtml(String(noReg))}</div>
+      <div class="stiker-bottom-cell">${escapeHtml(String(tahun))}</div>
+      <div class="stiker-bottom-cell">${escapeHtml(String(harga))}</div>
+    </div>
+  `;
+}
+
+// Membuat PDF berisi grid stiker (2 kolom x 6 baris = 12 stiker/halaman A4)
+// untuk seluruh barang yang dicentang. Tata letak tiap stiker meniru persis
+// contoh fisik: logo kiri, judul 3 baris kanan, lalu baris Nomor Lokasi,
+// Kode Barang, Nama Barang, dan baris bawah No.Register / Tahun / Harga.
+async function generateStikerPdf() {
+  const schema = KIB_SCHEMAS[stikerKibKey];
+  const selectedRows = stikerRows.filter((r) => stikerSelectedIds.has(r.id));
+  if (selectedRows.length === 0) {
+    alert("Pilih minimal satu barang untuk dicetak stikernya.");
+    return;
+  }
+  const nomorLokasi = stikerLokasiInput.value.trim();
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginX = 10;
+  const marginY = 10;
+  const cols = 2;
+  const rows = 6;
+  const gapX = 4;
+  const gapY = 4;
+  const cardW = (pageWidth - marginX * 2 - gapX * (cols - 1)) / cols;
+  const cardH = (pageHeight - marginY * 2 - gapY * (rows - 1)) / rows;
+  const perPage = cols * rows;
+
+  selectedRows.forEach((row, i) => {
+    const posInPage = i % perPage;
+    if (i > 0 && posInPage === 0) doc.addPage();
+    const col = posInPage % cols;
+    const r = Math.floor(posInPage / cols);
+    const x = marginX + col * (cardW + gapX);
+    const y = marginY + r * (cardH + gapY);
+    drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, cardW, cardH);
+  });
+
+  doc.save(`stiker_kib_${schema.key.toLowerCase()}.pdf`);
+}
+
+function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
+  const headerH = h * 0.26;
+  const lokasiH = h * 0.15;
+  const kodeH = h * 0.15;
+  const namaH = h * 0.2;
+  const bottomH = h - headerH - lokasiH - kodeH - namaH;
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.25);
+  doc.rect(x, y, w, h);
+
+  // --- baris header: logo kiri + judul 3 baris kanan ---
+  const logoW = w * 0.22;
+  doc.line(x + logoW, y, x + logoW, y + headerH);
+  doc.line(x, y + headerH, x + w, y + headerH);
+  try {
+    doc.addImage(BREBES_LOGO_DATA_URL, "PNG", x + 1.2, y + (headerH - (logoW - 2.4)) / 2, logoW - 2.4, logoW - 2.4);
+  } catch {
+    // kalau logo gagal digambar, stiker tetap dibuat tanpa logo
+  }
+
+  const titleCenterX = x + logoW + (w - logoW) / 2;
+  const unit = (row.unit_kerja || "").toString().trim().toUpperCase() || "-";
+  const titleLines = ["BARANG MILIK DAERAH", "PEMERINTAH KABUPATEN BREBES", unit];
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(6.2);
+  const lineGap = headerH / (titleLines.length + 0.5);
+  titleLines.forEach((t, idx) => {
+    const wrapped = doc.splitTextToSize(t, w - logoW - 3);
+    doc.text(wrapped[0], titleCenterX, y + lineGap * (idx + 0.9), { align: "center" });
+  });
+
+  // --- baris Nomor Lokasi ---
+  let curY = y + headerH;
+  doc.line(x, curY + lokasiH, x + w, curY + lokasiH);
+  doc.setFontSize(7);
+  doc.text(nomorLokasi || "-", x + w / 2, curY + lokasiH / 2 + 1.2, { align: "center" });
+
+  // --- baris Kode Barang ---
+  curY += lokasiH;
+  doc.line(x, curY + kodeH, x + w, curY + kodeH);
+  doc.text((row.kode_barang || "-").toString(), x + w / 2, curY + kodeH / 2 + 1.2, { align: "center" });
+
+  // --- baris Nama Barang / Judul (bisa 2 baris) ---
+  curY += kodeH;
+  doc.line(x, curY + namaH, x + w, curY + namaH);
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(6.3);
+  const namaBarang = getStikerDisplayName(row);
+  const namaWrapped = doc.splitTextToSize(namaBarang, w - 4).slice(0, 2);
+  const namaLineH = namaH / (namaWrapped.length + 0.6);
+  namaWrapped.forEach((t, idx) => {
+    doc.text(t, x + w / 2, curY + namaLineH * (idx + 0.9), { align: "center" });
+  });
+
+  // --- baris bawah: No. Register | Tahun | Harga ---
+  curY += namaH;
+  const colW = w / 3;
+  doc.line(x + colW, curY, x + colW, curY + bottomH);
+  doc.line(x + colW * 2, curY, x + colW * 2, curY + bottomH);
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(7.3);
+  const noReg = (row.nomor_register || "-").toString();
+  const tahun = getRecordYear(schema, row) || "-";
+  const harga = formatRupiah(row.harga) || "-";
+  const bottomTextY = curY + bottomH / 2 + 1.4;
+  doc.text(noReg, x + colW / 2, bottomTextY, { align: "center" });
+  doc.text(tahun, x + colW * 1.5, bottomTextY, { align: "center" });
+  doc.text(harga, x + colW * 2.5, bottomTextY, { align: "center" });
+
+  doc.setFont(undefined, "normal");
 }
