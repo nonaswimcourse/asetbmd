@@ -418,19 +418,27 @@ tbody tr:hover { background: #f9fafb; }
 .stiker-row { display: flex; border-bottom: 1px solid rgba(15, 47, 122, 0.18); }
 .stiker-row:last-child { border-bottom: none; }
 .stiker-head {
-  align-items: stretch;
+  position: relative; padding: 6px 4px;
   background: linear-gradient(135deg, var(--brand-navy), var(--brand-blue) 70%);
   border-bottom: none;
 }
 .stiker-logo-cell {
-  width: 74px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  position: absolute; left: 0; top: 0; bottom: 0; width: 74px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
   border-right: 1px solid rgba(255,255,255,0.25); padding: 4px;
 }
 .stiker-logo-cell img {
   width: 52px; height: 52px; object-fit: contain; background: #fff; border-radius: 50%;
   padding: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
-.stiker-title-cell { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3px 6px; }
+/* Padding kiri-kanan disamakan (selebar sel logo) supaya judul benar-benar
+   center di TENGAH KARTU — sejajar dengan baris Nomor Lokasi & Judul Buku
+   di bawahnya yang juga full-width center — bukan cuma center di ruang
+   kosong sebelah kanan logo. */
+.stiker-title-cell {
+  width: 100%; box-sizing: border-box; padding: 0 74px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+}
 .stiker-title-cell div { text-align: center; font-weight: 700; font-size: 0.78rem; line-height: 1.35; text-transform: uppercase; color: #fff; }
 .stiker-line { padding: 5px 8px; font-size: 0.8rem; font-weight: 700; text-align: center; color: var(--brand-navy); }
 .stiker-line-small { font-size: 0.72rem; font-weight: 500; color: #334155; }
