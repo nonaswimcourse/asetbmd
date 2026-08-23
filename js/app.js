@@ -73,6 +73,13 @@ const stikerErrorBox = document.getElementById("stikerErrorBox");
 const stikerPreview = document.getElementById("stikerPreview");
 const stikerSelectedCount = document.getElementById("stikerSelectedCount");
 const stikerGenerateBtn = document.getElementById("stikerGenerateBtn");
+const stikerReviewBtn = document.getElementById("stikerReviewBtn");
+const stikerReviewModalOverlay = document.getElementById("stikerReviewModalOverlay");
+const stikerReviewModalClose = document.getElementById("stikerReviewModalClose");
+const stikerReviewCloseBtn = document.getElementById("stikerReviewCloseBtn");
+const stikerReviewPrintBtn = document.getElementById("stikerReviewPrintBtn");
+const stikerReviewGrid = document.getElementById("stikerReviewGrid");
+const stikerReviewCount = document.getElementById("stikerReviewCount");
 
 const formModalOverlay = document.getElementById("formModalOverlay");
 const formModalTitle = document.getElementById("formModalTitle");
@@ -1392,6 +1399,7 @@ stikerFilterTahunSelect.addEventListener("change", (e) => {
 stikerLokasiInput.addEventListener("input", () => {
   localStorage.setItem(STIKER_LOKASI_STORAGE_KEY, stikerLokasiInput.value);
   updateStikerPreview();
+  if (stikerReviewModalOverlay.style.display !== "none") renderStikerReviewGrid();
 });
 
 let stikerSearchTimer = null;
@@ -1413,6 +1421,62 @@ stikerSelectAllCheckbox.addEventListener("change", () => {
 });
 
 stikerGenerateBtn.addEventListener("click", generateStikerPdf);
+stikerReviewPrintBtn.addEventListener("click", generateStikerPdf);
+
+// ---------- review modal: pratinjau semua stiker terpilih sebelum cetak ----------
+stikerReviewBtn.addEventListener("click", openStikerReviewModal);
+stikerReviewModalClose.addEventListener("click", closeStikerReviewModal);
+stikerReviewCloseBtn.addEventListener("click", closeStikerReviewModal);
+stikerReviewModalOverlay.addEventListener("click", (e) => {
+  if (e.target === stikerReviewModalOverlay) closeStikerReviewModal();
+});
+
+function openStikerReviewModal() {
+  if (stikerSelectedIds.size === 0) {
+    alert("Pilih minimal satu barang untuk direview.");
+    return;
+  }
+  renderStikerReviewGrid();
+  stikerReviewModalOverlay.style.display = "flex";
+}
+
+function closeStikerReviewModal() {
+  stikerReviewModalOverlay.style.display = "none";
+}
+
+// Menampilkan seluruh stiker yang tercentang (ikut urutan data), memakai
+// pratinjau HTML yang sama dengan stiker satuan, supaya tata letak & data
+// yang terlihat di sini identik dengan hasil PDF-nya nanti. User masih bisa
+// membatalkan centang satu barang langsung dari kartu review ini.
+function renderStikerReviewGrid() {
+  const schema = KIB_SCHEMAS[stikerKibKey];
+  const nomorLokasi = stikerLokasiInput.value.trim();
+  const selectedRows = stikerRows.filter((r) => stikerSelectedIds.has(r.id));
+
+  stikerReviewCount.textContent = String(selectedRows.length);
+
+  if (selectedRows.length === 0) {
+    stikerReviewGrid.innerHTML = `<div class="stiker-review-empty">Tidak ada barang yang dipilih.</div>`;
+    return;
+  }
+
+  stikerReviewGrid.innerHTML = "";
+  selectedRows.forEach((row) => {
+    const item = document.createElement("div");
+    item.className = "stiker-review-item";
+    item.innerHTML =
+      `<button type="button" class="stiker-review-remove" data-id="${row.id}">✕ Batalkan</button>` +
+      `<div class="stiker-card">${renderStikerPreviewHtml(schema, row, nomorLokasi)}</div>`;
+    item.querySelector(".stiker-review-remove").addEventListener("click", () => {
+      stikerSelectedIds.delete(row.id);
+      renderStikerList();
+      updateStikerPreview();
+      renderStikerReviewGrid();
+      if (stikerSelectedIds.size === 0) closeStikerReviewModal();
+    });
+    stikerReviewGrid.appendChild(item);
+  });
+}
 
 async function loadStikerData() {
   const schema = KIB_SCHEMAS[stikerKibKey];
