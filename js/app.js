@@ -280,10 +280,13 @@ async function loadFlatData(schema) {
   tableBody.innerHTML = `<tr><td class="muted center" colspan="99">Memuat data…</td></tr>`;
   pagination.style.display = "flex";
 
+  // Diurutkan ASCENDING (id lama → baru) supaya nomor urut & "No Urut" yang
+  // diisi berurutan (mis. dari fitur "Jumlah Unit": 0001-0010) tampil dari
+  // atas ke bawah 1 → 10, bukan terbalik 10 → 1.
   let query = supabase
     .from(schema.table)
     .select("*", { count: "exact" })
-    .order("id", { ascending: false })
+    .order("id", { ascending: true })
     .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
   if (search.trim()) {
