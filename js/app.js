@@ -98,6 +98,12 @@ const confirmMessage = document.getElementById("confirmMessage");
 const confirmCancelBtn = document.getElementById("confirmCancelBtn");
 const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 
+const detailModalOverlay = document.getElementById("detailModalOverlay");
+const detailModalTitle = document.getElementById("detailModalTitle");
+const detailModalClose = document.getElementById("detailModalClose");
+const detailModalBody = document.getElementById("detailModalBody");
+const detailCloseBtn = document.getElementById("detailCloseBtn");
+
 // Mobile nav (hamburger drawer)
 const hamburgerBtn = document.getElementById("hamburgerBtn");
 const sidebarCloseBtn = document.getElementById("sidebarCloseBtn");
@@ -389,11 +395,13 @@ function renderTable(schema, rows) {
       `<td>${noUrut}</td>` +
       displayFields.map((f) => `<td>${renderCell(f, row)}</td>`).join("") +
       `<td class="actions-cell">
+         <button class="link-btn" data-action="view">Lihat</button>
          <button class="link-btn" data-action="edit">Edit</button>
          <button class="link-btn danger" data-action="delete">Hapus</button>
          <button class="link-btn" data-action="pdf">PDF</button>
        </td>`;
 
+    tr.querySelector('[data-action="view"]').addEventListener("click", () => openDetailModal(schema, row));
     tr.querySelector('[data-action="edit"]').addEventListener("click", () => openFormModal(row));
     tr.querySelector('[data-action="delete"]').addEventListener("click", () => openConfirmModal(row));
     tr.querySelector('[data-action="pdf"]').addEventListener("click", () => exportSingleRecordPdf(schema, row, noUrut));
@@ -473,14 +481,46 @@ function rangeLabel(sorted) {
   return `${sorted[0]} – ${sorted[sorted.length - 1]}`;
 }
 
-function groupRowsByName(rows) {
+// Field yang membedakan tiap UNIT dalam satu grup (bukan penanda barang yang
+// berbeda) — selalu dikecualikan dari kunci pengelompokan.
+const GROUP_KEY_SKIP_FIELDS = new Set(["no_urut", "nomor_register", "id_pemda"]);
+
+// Kunci pengelompokan satu baris. Default (skema lain): cukup "Nama Barang"
+// seperti sebelumnya. Kalau skema.groupByExactMatch aktif (lihat KIB E di
+// schemas.js): pakai SELURUH field selain field per-unit di atas, supaya
+// baris hanya bergabung ke grup yang sama kalau memang seluruh datanya sama
+// persis (mis. dibuat sekaligus lewat "Jumlah Unit" saat Tambah Data) —
+// bukan cuma karena "Nama Barang"-nya kebetulan sama.
+function groupKeyForRow(schema, row) {
+  if (!schema.groupByExactMatch) {
+    return (row.nama_barang || "(Tanpa Nama Barang)").trim() || "(Tanpa Nama Barang)";
+  }
+  return schema.fields
+    .filter((f) => !GROUP_KEY_SKIP_FIELDS.has(f.key))
+    .map((f) => `${f.key}:${String(row[f.key] ?? "").trim().toLowerCase()}`)
+    .join("|");
+}
+
+// Nama yang ditampilkan untuk sebuah grup. Untuk KIB E, tambahkan Judul Buku
+// (kalau ada) supaya grup yang beda judul tetap gampang dibedakan di judul
+// modal edit / nama file PDF, meski Nama Barang-nya sama.
+function groupDisplayName(schema, row) {
+  const base = (row.nama_barang || "(Tanpa Nama Barang)").trim() || "(Tanpa Nama Barang)";
+  if (schema.key === "E" && row.judul_buku && String(row.judul_buku).trim()) {
+    return `${base} - ${row.judul_buku}`;
+  }
+  return base;
+}
+
+function groupRowsByName(schema, rows) {
   const map = new Map();
   rows.forEach((row) => {
-    const key = (row.nama_barang || "(Tanpa Nama Barang)").trim() || "(Tanpa Nama Barang)";
+    const key = groupKeyForRow(schema, row);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(row);
   });
-  return Array.from(map.entries()).map(([name, items]) => {
+  return Array.from(map.values()).map((items) => {
+    const name = groupDisplayName(schema, items[0]);
     const sortedRegs = sortedFieldValues(items, "nomor_register");
     const sortedIdPemda = sortedFieldValues(items, "id_pemda");
     const sortedNoUrut = sortedFieldValues(items, "no_urut");
@@ -518,7 +558,7 @@ function renderGroupedTable(schema, rows) {
     return;
   }
 
-  const groups = groupRowsByName(rows);
+  const groups = groupRowsByName(schema, rows);
   tableBody.innerHTML = "";
 
   groups.forEach((group, idx) => {
@@ -535,10 +575,14 @@ function renderGroupedTable(schema, rows) {
        <td>${escapeHtml(group.noUrutRange)}</td>
        <td>${escapeHtml(group.regRange)}</td>
        <td class="actions-cell">
+         <button class="link-btn" data-action="view-group">Lihat</button>
          <button class="link-btn" data-action="edit-group">Edit</button>
          <button class="link-btn" data-action="pdf-group">⬇ PDF Rangkuman</button>
        </td>`;
 
+    tr.querySelector('[data-action="view-group"]').addEventListener("click", () =>
+      openDetailModal(schema, sample, { groupItems: group.items })
+    );
     tr.querySelector('[data-action="edit-group"]').addEventListener("click", () => openGroupEditModal(schema, group));
     tr.querySelector('[data-action="pdf-group"]').addEventListener("click", () => exportGroupPdf(schema, group, noUrut));
 
@@ -818,6 +862,75 @@ function closeFormModal() {
   editingRow = null;
   editingGroupIds = null;
   pendingPhotoFiles = {};
+}
+
+// ================= LIHAT (VIEW DETAIL, READ-ONLY) =================
+// Menampilkan seluruh field satu data (bukan cuma kolom tabel depan) tanpa
+// membuka form edit. Kalau dipanggil dari baris grup, ditambah daftar tiap
+// unit dalam grup itu (No Urut / No. Register / ID Pemda masing-masing).
+
+detailModalClose.addEventListener("click", closeDetailModal);
+detailCloseBtn.addEventListener("click", closeDetailModal);
+detailModalOverlay.addEventListener("click", (e) => {
+  if (e.target === detailModalOverlay) closeDetailModal();
+});
+
+function closeDetailModal() {
+  detailModalOverlay.style.display = "none";
+  detailModalBody.innerHTML = "";
+}
+
+function renderDetailFields(schema, row) {
+  return schema.fields
+    .map((f) => {
+      let valueHtml;
+      if (f.type === "image") {
+        const url = row[f.key];
+        valueHtml = url
+          ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(f.label)}" class="detail-photo" />`
+          : `<span class="muted">-</span>`;
+      } else {
+        valueHtml = `<span class="detail-value">${renderCell(f, row)}</span>`;
+      }
+      return `<div class="detail-row"><span class="detail-label">${escapeHtml(f.label)}</span>${valueHtml}</div>`;
+    })
+    .join("");
+}
+
+function openDetailModal(schema, row, opts = {}) {
+  const groupItems = opts.groupItems || null;
+  const isGroup = Boolean(groupItems && groupItems.length > 1);
+
+  detailModalTitle.textContent = isGroup
+    ? `Detail Grup: ${groupDisplayName(schema, row)} (${groupItems.length} unit)`
+    : "Detail Data Aset";
+
+  let html = `<div class="detail-fields">${renderDetailFields(schema, row)}</div>`;
+
+  if (isGroup) {
+    html +=
+      `<h3 class="detail-subtitle">Daftar Unit dalam Grup Ini (${groupItems.length} unit)</h3>
+       <div class="table-scroll">
+         <table class="detail-unit-table">
+           <thead>
+             <tr><th>No</th><th>${escapeHtml(noUrutLabel(schema))}</th><th>ID Pemda</th><th>No. Register</th></tr>
+           </thead>
+           <tbody>` +
+      groupItems
+        .map(
+          (item, i) =>
+            `<tr><td>${i + 1}</td><td>${escapeHtml(item.no_urut ?? "-")}</td><td>${escapeHtml(
+              item.id_pemda ?? "-"
+            )}</td><td>${escapeHtml(item.nomor_register ?? "-")}</td></tr>`
+        )
+        .join("") +
+      `</tbody>
+         </table>
+       </div>`;
+  }
+
+  detailModalBody.innerHTML = html;
+  detailModalOverlay.style.display = "flex";
 }
 
 // Menghasilkan No. Register berurutan otomatis sebanyak `qty`, dimulai dari

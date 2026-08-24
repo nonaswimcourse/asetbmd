@@ -172,6 +172,15 @@ export const KIB_SCHEMAS = {
       "kondisi",
     ],
     searchFields: ["nama_barang", "judul_buku", "jenis_buku", "pengarang", "nomor_register"],
+    // KIB E memakai "Nama Barang" sebagai kategori umum (mis. "Buku"), jadi
+    // banyak data berbeda (judul/jenis buku berbeda) bisa punya Nama Barang
+    // yang sama. Kalau dikelompokkan cuma dari Nama Barang saja, data baru
+    // yang tidak berkaitan akan ikut tergabung ke grup yang salah. Untuk KIB
+    // E, grup HANYA dibentuk dari baris yang seluruh datanya sama persis
+    // (kecuali No Urut/No. Register/ID Pemda) — artinya cuma unit yang
+    // memang diinput sekaligus (lewat "Jumlah Unit") yang akan mengelompok;
+    // input baru lainnya tetap tampil sendiri-sendiri di data awal.
+    groupByExactMatch: true,
     fields: [
       ...baseIdentity,
       { key: "jenis_koleksi", label: "Jenis Koleksi", type: "select", options: JENIS_KOLEKSI_E_OPTIONS, required: true },
