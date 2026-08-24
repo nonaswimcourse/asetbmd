@@ -563,18 +563,26 @@ function renderGroupedTable(schema, rows) {
 
   const groups = groupRowsByName(schema, rows);
   tableBody.innerHTML = "";
+  const totalCols = baseFields.length + 5;
 
   groups.forEach((group, idx) => {
     const sample = group.items[0]; // wakili data yang sama di seluruh grup
     // No urut mengikuti urutan grup di tampilan ini (tidak disimpan ke database).
     const noUrut = idx + 1;
+    // Baris cuma bisa "dibuka" (expand) kalau memang berisi lebih dari 1 unit
+    // fisik (mis. dibuat sekaligus lewat "Jumlah Unit"). Data satuan biasa
+    // (1 unit) tidak dapat caret/klik-expand karena memang tidak ada daftar
+    // unit lain untuk ditampilkan.
+    const isMulti = group.count > 1;
 
     const tr = document.createElement("tr");
-    tr.className = "group-row";
+    tr.className = "group-row" + (isMulti ? " group-row-expandable" : "");
     tr.innerHTML =
       `<td>${noUrut}</td>` +
       baseFields.map((f) => `<td>${renderCell(f, sample)}</td>`).join("") +
-      `<td><span class="group-count-badge">${group.count} unit</span></td>
+      `<td><span class="group-count-badge">${group.count} unit</span>${
+         isMulti ? `<span class="group-caret">▶</span>` : ""
+       }</td>
        <td>${escapeHtml(group.noUrutRange)}</td>
        <td>${escapeHtml(group.regRange)}</td>
        <td class="actions-cell">
@@ -583,13 +591,53 @@ function renderGroupedTable(schema, rows) {
          <button class="link-btn" data-action="pdf-group">⬇ PDF Rangkuman</button>
        </td>`;
 
-    tr.querySelector('[data-action="view-group"]').addEventListener("click", () =>
-      openDetailModal(schema, sample, { groupItems: group.items })
-    );
-    tr.querySelector('[data-action="edit-group"]').addEventListener("click", () => openGroupEditModal(schema, group));
-    tr.querySelector('[data-action="pdf-group"]').addEventListener("click", () => exportGroupPdf(schema, group, noUrut));
+    tr.querySelector('[data-action="view-group"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      openDetailModal(schema, sample, { groupItems: group.items });
+    });
+    tr.querySelector('[data-action="edit-group"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      openGroupEditModal(schema, group);
+    });
+    tr.querySelector('[data-action="pdf-group"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      exportGroupPdf(schema, group, noUrut);
+    });
 
     tableBody.appendChild(tr);
+
+    if (isMulti) {
+      // Baris tersembunyi berisi daftar tiap unit dalam grup ini (No Urut, ID
+      // Pemda, No. Register masing-masing) — muncul saat baris induk diklik,
+      // supaya tidak perlu buka modal "Lihat" cuma untuk melihat rincian unit.
+      const childTr = document.createElement("tr");
+      childTr.className = "group-children-row";
+      childTr.innerHTML =
+        `<td class="child-cell" colspan="${totalCols}">
+           <table>
+             <thead>
+               <tr><th>No</th><th>${escapeHtml(noUrutLabel(schema))}</th><th>ID Pemda</th><th>No. Register</th></tr>
+             </thead>
+             <tbody>` +
+        group.items
+          .map(
+            (item, i) =>
+              `<tr><td>${i + 1}</td><td>${escapeHtml(item.no_urut ?? "-")}</td><td>${escapeHtml(
+                item.id_pemda ?? "-"
+              )}</td><td>${escapeHtml(item.nomor_register ?? "-")}</td></tr>`
+          )
+          .join("") +
+        `</tbody>
+           </table>
+         </td>`;
+      tableBody.appendChild(childTr);
+
+      tr.addEventListener("click", (e) => {
+        if (e.target.closest(".link-btn")) return;
+        tr.classList.toggle("expanded");
+        childTr.classList.toggle("open");
+      });
+    }
   });
 }
 
