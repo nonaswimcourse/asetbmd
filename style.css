@@ -290,11 +290,11 @@ tbody tr:hover { background: #f9fafb; }
 .batch-section p { margin: 0.5rem 0 0; line-height: 1.4; }
 
 /* Grouped table view */
-.group-row { cursor: pointer; background: #f9fafb; font-weight: 600; }
-.group-row:hover { background: #f0f2f5; }
 .group-row td { border-bottom: 1px solid #e5e7eb; }
-.group-caret { display: inline-block; margin-right: 0.5rem; transition: transform 0.15s ease; }
-.group-row.expanded .group-caret { transform: rotate(90deg); }
+.group-row-expandable { cursor: pointer; background: #f9fafb; font-weight: 600; }
+.group-row-expandable:hover { background: #f0f2f5; }
+.group-caret { display: inline-block; margin-left: 0.4rem; font-size: 0.7rem; color: var(--brand-blue-dark); transition: transform 0.15s ease; }
+.group-row-expandable.expanded .group-caret { transform: rotate(90deg); }
 .group-count-badge {
   display: inline-block; background: #dbeafe; color: var(--brand-blue-dark); border-radius: 999px;
   padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 700; margin-left: 0.4rem;
