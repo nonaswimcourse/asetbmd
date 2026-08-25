@@ -283,12 +283,18 @@ async function loadDashboard() {
   const largest = results.filter((item) => item.count !== null).sort((a,b) => b.count - a.count)[0];
 
   dashboardStats.innerHTML = `
-    <div class="stat-card stat-primary"><div class="stat-icon">▦</div><div><span>Total Record</span><strong>${total.toLocaleString("id-ID")}</strong><small>${available}/${KIB_LIST.length} KIB terbaca</small></div></div>
-    ${results.slice(0,5).map((item) => `
-      <button class="stat-card stat-clickable" data-dashboard-kib="${item.schema.key}">
+    <div class="stat-card stat-primary" data-tooltip="${available}/${KIB_LIST.length} KIB terbaca" tabindex="0" aria-label="Total record ${total.toLocaleString("id-ID")}. ${available} dari ${KIB_LIST.length} KIB terbaca.">
+      <div class="stat-icon">▦</div>
+      <div class="stat-content"><span>Total Record</span><strong>${total.toLocaleString("id-ID")}</strong><small>${available}/${KIB_LIST.length} KIB terbaca</small></div>
+    </div>
+    ${results.slice(0,5).map((item) => {
+      const description = escapeHtml(item.schema.title.replace(`KIB ${item.schema.key} - `,""));
+      return `
+      <button class="stat-card stat-clickable" data-dashboard-kib="${item.schema.key}" data-tooltip="${description}" aria-label="KIB ${item.schema.key}: ${item.count === null ? "data tidak tersedia" : item.count.toLocaleString("id-ID") + " record"}. ${description}">
         <div class="stat-icon kib-${item.schema.key}">${item.schema.key}</div>
-        <div><span>KIB ${item.schema.key}</span><strong>${item.count === null ? "—" : item.count.toLocaleString("id-ID")}</strong><small>${escapeHtml(item.schema.title.replace(`KIB ${item.schema.key} - `,""))}</small></div>
-      </button>`).join("")}
+        <div class="stat-content"><span>KIB ${item.schema.key}</span><strong>${item.count === null ? "—" : item.count.toLocaleString("id-ID")}</strong><small>${description}</small></div>
+      </button>`;
+    }).join("")}
   `;
 
   const max = Math.max(1, ...results.map(x => x.count || 0));
