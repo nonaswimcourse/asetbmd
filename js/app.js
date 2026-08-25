@@ -13,7 +13,7 @@ let pendingPhotoFiles = {};
 
 // ---------- state ----------
 let activeKibKey = "A";
-let currentView = "data"; // "data" | "stiker"
+let currentView = "dashboard"; // "dashboard" | "data" | "stiker"
 let page = 0;
 let search = "";
 let totalCount = 0;
@@ -58,6 +58,12 @@ const pageInfo = document.getElementById("pageInfo");
 const pagination = document.getElementById("pagination");
 
 // Cetak Stiker
+const dashboardView = document.getElementById("dashboardView");
+const dashboardNavBtn = document.getElementById("dashboardNavBtn");
+const dashboardStats = document.getElementById("dashboardStats");
+const dashboardBars = document.getElementById("dashboardBars");
+const dashboardRefreshBtn = document.getElementById("dashboardRefreshBtn");
+const refreshBtn = document.getElementById("refreshBtn");
 const dataView = document.getElementById("dataView");
 const stikerView = document.getElementById("stikerView");
 const stikerNavBtn = document.getElementById("stikerNavBtn");
@@ -164,7 +170,7 @@ function showApp(session) {
   userEmailLabel.textContent = session.user.email;
   buildSidebar();
   updateGroupToggleVisibility();
-  loadData();
+  showDashboardView();
 }
 
 loginForm.addEventListener("submit", async (e) => {
@@ -178,7 +184,10 @@ loginForm.addEventListener("submit", async (e) => {
   loginBtn.disabled = false;
   loginBtn.textContent = "Masuk";
   if (error) {
-    loginError.textContent = error.message;
+    const message = error.message || "Login gagal.";
+    loginError.textContent = /invalid login credentials/i.test(message)
+      ? "Email atau password tidak sesuai."
+      : message;
     loginError.style.display = "block";
   }
 });
@@ -189,6 +198,11 @@ logoutBtn.addEventListener("click", () => supabase.auth.signOut());
 
 function buildSidebar() {
   sidebarNav.innerHTML = "";
+  const dashBtn = document.createElement("button");
+  dashBtn.className = "sidebar-item" + (currentView === "dashboard" ? " active" : "");
+  dashBtn.innerHTML = `<span class="sidebar-letter">⌂</span><span>Dashboard</span>`;
+  dashBtn.addEventListener("click", showDashboardView);
+  sidebarNav.appendChild(dashBtn);
   KIB_LIST.forEach((s) => {
     const btn = document.createElement("button");
     btn.className = "sidebar-item" + (currentView === "data" && s.key === activeKibKey ? " active" : "");
@@ -214,14 +228,26 @@ function buildSidebar() {
 
 // ================= VIEW SWITCHING (Data <-> Cetak Stiker) =================
 
+function showDashboardView() {
+  currentView = "dashboard";
+  dashboardView.style.display = "";
+  dataView.style.display = "none";
+  stikerView.style.display = "none";
+  buildSidebar();
+  closeMobileSidebar();
+  loadDashboard();
+}
+
 function showDataView() {
   currentView = "data";
+  dashboardView.style.display = "none";
   dataView.style.display = "";
   stikerView.style.display = "none";
 }
 
 function showStikerView() {
   currentView = "stiker";
+  dashboardView.style.display = "none";
   dataView.style.display = "none";
   stikerView.style.display = "";
   buildSidebar();
@@ -230,6 +256,7 @@ function showStikerView() {
 }
 
 stikerNavBtn.addEventListener("click", showStikerView);
+dashboardNavBtn?.addEventListener("click", showDashboardView);
 
 // KIB C tidak memakai sistem pengelompokan otomatis (data KIB C berbasis
 // gedung/bangunan per unit, bukan kumpulan barang sejenis seperti KIB
@@ -239,6 +266,74 @@ function updateGroupToggleVisibility() {
   const isKibC = activeKibKey === "C";
   groupToggleBtn.style.display = isKibC ? "none" : "";
 }
+
+
+// ================= DASHBOARD =================
+async function loadDashboard() {
+  dashboardStats.innerHTML = Array.from({length: 6}, () => `<div class="stat-card skeleton-card"></div>`).join("");
+  dashboardBars.innerHTML = `<div class="dashboard-empty">Mengambil ringkasan data…</div>`;
+
+  const results = await Promise.all(KIB_LIST.map(async (schema) => {
+    const { count, error } = await supabase.from(schema.table).select("id", { count: "exact", head: true });
+    return { schema, count: error ? null : (count || 0), error };
+  }));
+
+  const total = results.reduce((sum, item) => sum + (item.count || 0), 0);
+  const available = results.filter((item) => item.count !== null).length;
+  const largest = results.filter((item) => item.count !== null).sort((a,b) => b.count - a.count)[0];
+
+  dashboardStats.innerHTML = `
+    <div class="stat-card stat-primary"><div class="stat-icon">▦</div><div><span>Total Record</span><strong>${total.toLocaleString("id-ID")}</strong><small>${available}/${KIB_LIST.length} KIB terbaca</small></div></div>
+    ${results.slice(0,5).map((item) => `
+      <button class="stat-card stat-clickable" data-dashboard-kib="${item.schema.key}">
+        <div class="stat-icon kib-${item.schema.key}">${item.schema.key}</div>
+        <div><span>KIB ${item.schema.key}</span><strong>${item.count === null ? "—" : item.count.toLocaleString("id-ID")}</strong><small>${escapeHtml(item.schema.title.replace(`KIB ${item.schema.key} - `,""))}</small></div>
+      </button>`).join("")}
+  `;
+
+  const max = Math.max(1, ...results.map(x => x.count || 0));
+  dashboardBars.innerHTML = results.map((item) => {
+    const value = item.count || 0;
+    const width = Math.max(3, Math.round(value / max * 100));
+    return `<button class="bar-row" data-dashboard-kib="${item.schema.key}">
+      <span class="bar-label"><b>KIB ${item.schema.key}</b><small>${escapeHtml(item.schema.title.replace(`KIB ${item.schema.key} - `,""))}</small></span>
+      <span class="bar-track"><i style="width:${width}%"></i></span><strong>${item.count === null ? "—" : value.toLocaleString("id-ID")}</strong>
+    </button>`;
+  }).join("");
+
+  if (largest && largest.count > 0) {
+    dashboardBars.insertAdjacentHTML("afterbegin", `<div class="dashboard-insight">● Data terbanyak saat ini: <b>KIB ${largest.schema.key}</b> dengan ${largest.count.toLocaleString("id-ID")} record.</div>`);
+  }
+
+  dashboardStats.querySelectorAll("[data-dashboard-kib]").forEach((el) => el.addEventListener("click", () => openDashboardKib(el.dataset.dashboardKib)));
+  dashboardBars.querySelectorAll("[data-dashboard-kib]").forEach((el) => el.addEventListener("click", () => openDashboardKib(el.dataset.dashboardKib)));
+}
+
+function openDashboardKib(key) {
+  activeKibKey = key;
+  page = 0;
+  search = "";
+  searchInput.value = "";
+  showDataView();
+  buildSidebar();
+  updateGroupToggleVisibility();
+  loadData();
+  closeMobileSidebar();
+}
+
+document.querySelectorAll("[data-quick]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const action = btn.dataset.quick;
+    if (action === "add") {
+      activeKibKey = "A";
+      showDataView(); buildSidebar(); updateGroupToggleVisibility(); loadData().then(() => openFormModal());
+    } else if (action === "stiker") showStikerView();
+    else if (action === "kib") openDashboardKib(btn.dataset.kib || "A");
+  });
+});
+
+dashboardRefreshBtn?.addEventListener("click", loadDashboard);
+refreshBtn?.addEventListener("click", () => loadData());
 
 // ================= DATA LOADING =================
 
@@ -1954,3 +2049,13 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   doc.setFont(undefined, "normal");
   doc.setTextColor(0, 0, 0);
 }
+
+// ================= GLOBAL UX =================
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  closeMobileSidebar();
+  if (formModalOverlay?.style.display !== "none") closeFormModal();
+  if (detailModalOverlay?.style.display !== "none") closeDetailModal();
+  if (confirmModalOverlay?.style.display !== "none") confirmModalOverlay.style.display = "none";
+  if (stikerReviewModalOverlay?.style.display !== "none") closeStikerReviewModal();
+});
