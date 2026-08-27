@@ -33,33 +33,57 @@ let stikerFilterTahun = ""; // filter dropdown: tahun persis
 const STIKER_LOKASI_STORAGE_KEY = "stiker_nomor_lokasi";
 
 // ---------- konfigurasi warna stiker per rentang tahun ----------
-// Atur sendiri di sini: tambah/ubah/hapus baris kapan saja untuk mengubah
-// warna stiker berdasarkan tahun perolehan barang (tahun_pengadaan/
-// tahun_pembelian/dst, sesuai skema KIB masing-masing).
+// Warna diatur lewat panel "🎨 Warna per Tahun" di halaman Cetak Stiker
+// (disimpan di localStorage browser), jadi tidak perlu edit kode lagi.
+// DEFAULT di bawah cuma dipakai kalau belum pernah diatur / saat tombol
+// "Kembalikan Bawaan" ditekan.
 // - from  : tahun mulai rentang ini berlaku (wajib diisi).
-// - to    : tahun akhir rentang (inklusif). Isi `null` untuk "seterusnya"
-//           (tidak ada batas atas) sampai ada rentang lain yang menimpanya.
+// - to    : tahun akhir rentang (inklusif). `null` = "seterusnya" (tidak ada
+//           batas atas) sampai ada rentang lain yang menimpanya.
 // - bg    : warna latar belakang stiker (kode HEX, mis. "#ffffff").
 // - text  : warna teks, garis pembatas, dan bingkai stiker (kode HEX).
-// Urutan tidak masalah — rentang yang cocok dengan tahun barang dipakai;
-// kalau tahun tidak cocok rentang manapun (atau tidak diketahui), dipakai
-// STIKER_DEFAULT_COLOR di bawah.
-const STIKER_YEAR_COLOR_RULES = [
+// Kalau ada beberapa rentang yang tumpang tindih, yang paling akhir dalam
+// daftar yang menang.
+const STIKER_DEFAULT_COLOR_RULES = [
   { from: 2023, to: null, bg: "#ffffff", text: "#0f2f7a" }, // 2023-sekarang: putih polos
-  // Contoh menambah rentang baru mulai tahun 2030 (tinggal hapus "//" & isi warnanya):
-  // { from: 2030, to: null, bg: "#fef9c3", text: "#78350f" },
 ];
 const STIKER_DEFAULT_COLOR = { bg: "#ffffff", text: "#0f2f7a" };
+const STIKER_COLOR_RULES_STORAGE_KEY = "stiker_warna_tahun_rules";
 
-// Mencari aturan warna yang cocok untuk satu tahun. Kalau ada beberapa
-// rentang yang tumpang tindih, yang paling akhir didefinisikan di
-// STIKER_YEAR_COLOR_RULES yang menang (supaya rentang baru bisa "menimpa"
-// rentang lama tanpa perlu menghapus baris lama).
+// Aturan warna yang sedang aktif dipakai (dimuat dari localStorage kalau
+// user pernah menyimpan lewat panel; kalau belum, pakai bawaan di atas).
+let stikerYearColorRules = loadStikerYearColorRules();
+// Salinan kerja yang sedang diedit di dalam modal panel warna (belum
+// disimpan sampai tombol "Simpan" ditekan).
+let stikerColorRulesDraft = [];
+
+function loadStikerYearColorRules() {
+  try {
+    const raw = localStorage.getItem(STIKER_COLOR_RULES_STORAGE_KEY);
+    if (!raw) return STIKER_DEFAULT_COLOR_RULES.map((r) => ({ ...r }));
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return STIKER_DEFAULT_COLOR_RULES.map((r) => ({ ...r }));
+    return parsed
+      .filter((r) => r && Number.isFinite(Number(r.from)))
+      .map((r) => ({
+        from: Number(r.from),
+        to: r.to === null || r.to === "" || r.to === undefined ? null : Number(r.to),
+        bg: r.bg || STIKER_DEFAULT_COLOR.bg,
+        text: r.text || STIKER_DEFAULT_COLOR.text,
+      }));
+  } catch {
+    return STIKER_DEFAULT_COLOR_RULES.map((r) => ({ ...r }));
+  }
+}
+
+// Mencari aturan warna yang cocok untuk satu tahun (lihat stikerYearColorRules
+// di atas). Kalau tahun tidak cocok rentang manapun / tidak diketahui,
+// dipakai STIKER_DEFAULT_COLOR.
 function getStikerYearColor(year) {
   const y = parseInt(year, 10);
   if (!Number.isNaN(y)) {
     let match = null;
-    for (const rule of STIKER_YEAR_COLOR_RULES) {
+    for (const rule of stikerYearColorRules) {
       if (y >= rule.from && (rule.to === null || rule.to === undefined || y <= rule.to)) {
         match = rule;
       }
@@ -132,6 +156,13 @@ const stikerReviewCloseBtn = document.getElementById("stikerReviewCloseBtn");
 const stikerReviewPrintBtn = document.getElementById("stikerReviewPrintBtn");
 const stikerReviewGrid = document.getElementById("stikerReviewGrid");
 const stikerReviewCount = document.getElementById("stikerReviewCount");
+const stikerColorSettingsBtn = document.getElementById("stikerColorSettingsBtn");
+const stikerColorModalOverlay = document.getElementById("stikerColorModalOverlay");
+const stikerColorModalClose = document.getElementById("stikerColorModalClose");
+const stikerColorRulesList = document.getElementById("stikerColorRulesList");
+const stikerColorAddRuleBtn = document.getElementById("stikerColorAddRuleBtn");
+const stikerColorResetBtn = document.getElementById("stikerColorResetBtn");
+const stikerColorSaveBtn = document.getElementById("stikerColorSaveBtn");
 
 const formModalOverlay = document.getElementById("formModalOverlay");
 const formModalTitle = document.getElementById("formModalTitle");
@@ -1790,6 +1821,119 @@ function closeStikerReviewModal() {
   stikerReviewModalOverlay.style.display = "none";
 }
 
+// ---------- panel "Warna Stiker per Tahun" ----------
+// User atur rentang tahun + warnanya lewat modal ini (color picker bawaan
+// browser), disimpan ke localStorage supaya tidak perlu edit kode. Selama
+// modal terbuka, perubahan ditampung dulu di stikerColorRulesDraft; baru
+// dipakai beneran (dan disimpan) kalau tombol "Simpan" ditekan.
+stikerColorSettingsBtn.addEventListener("click", openStikerColorModal);
+stikerColorModalClose.addEventListener("click", closeStikerColorModal);
+stikerColorModalOverlay.addEventListener("click", (e) => {
+  if (e.target === stikerColorModalOverlay) closeStikerColorModal();
+});
+stikerColorAddRuleBtn.addEventListener("click", () => {
+  const lastRule = stikerColorRulesDraft[stikerColorRulesDraft.length - 1];
+  stikerColorRulesDraft.push({
+    from: lastRule ? (lastRule.to ?? lastRule.from) + 1 : new Date().getFullYear(),
+    to: null,
+    bg: "#ffffff",
+    text: "#0f2f7a",
+  });
+  renderStikerColorRulesList();
+});
+stikerColorResetBtn.addEventListener("click", () => {
+  stikerColorRulesDraft = STIKER_DEFAULT_COLOR_RULES.map((r) => ({ ...r }));
+  renderStikerColorRulesList();
+});
+stikerColorSaveBtn.addEventListener("click", () => {
+  const cleaned = stikerColorRulesDraft
+    .filter((r) => Number.isFinite(Number(r.from)))
+    .map((r) => ({
+      from: Number(r.from),
+      to: r.to === null || r.to === "" || r.to === undefined ? null : Number(r.to),
+      bg: r.bg || STIKER_DEFAULT_COLOR.bg,
+      text: r.text || STIKER_DEFAULT_COLOR.text,
+    }));
+  if (cleaned.length === 0) {
+    alert("Minimal harus ada satu rentang tahun.");
+    return;
+  }
+  stikerYearColorRules = cleaned;
+  localStorage.setItem(STIKER_COLOR_RULES_STORAGE_KEY, JSON.stringify(cleaned));
+  closeStikerColorModal();
+  // Refresh tampilan yang lagi kelihatan supaya warnanya langsung berubah.
+  updateStikerPreview();
+  if (stikerReviewModalOverlay.style.display !== "none") renderStikerReviewGrid();
+});
+
+function openStikerColorModal() {
+  stikerColorRulesDraft = stikerYearColorRules.map((r) => ({ ...r }));
+  renderStikerColorRulesList();
+  stikerColorModalOverlay.style.display = "flex";
+}
+
+function closeStikerColorModal() {
+  stikerColorModalOverlay.style.display = "none";
+}
+
+function renderStikerColorRulesList() {
+  if (stikerColorRulesDraft.length === 0) {
+    stikerColorRulesList.innerHTML = `<div class="stiker-review-empty">Belum ada rentang tahun. Tambah dulu di bawah.</div>`;
+    return;
+  }
+  stikerColorRulesList.innerHTML = "";
+  stikerColorRulesDraft.forEach((rule, idx) => {
+    const row = document.createElement("div");
+    row.className = "stiker-color-rule";
+    row.innerHTML = `
+      <div class="stiker-color-rule-preview" data-role="preview">Contoh</div>
+      <div class="stiker-color-field">
+        <label>Dari tahun</label>
+        <input type="number" data-role="from" value="${rule.from}" />
+      </div>
+      <div class="stiker-color-field">
+        <label>Sampai tahun (kosongkan = seterusnya)</label>
+        <input type="number" data-role="to" value="${rule.to === null || rule.to === undefined ? "" : rule.to}" placeholder="seterusnya" />
+      </div>
+      <div class="stiker-color-field">
+        <label>Warna latar</label>
+        <span class="stiker-color-swatch-label"><input type="color" data-role="bg" value="${rule.bg}" /></span>
+      </div>
+      <div class="stiker-color-field">
+        <label>Warna teks/garis</label>
+        <span class="stiker-color-swatch-label"><input type="color" data-role="text" value="${rule.text}" /></span>
+      </div>
+      <button type="button" class="stiker-color-rule-remove" data-role="remove">✕ Hapus</button>
+    `;
+    const preview = row.querySelector('[data-role="preview"]');
+    const applyPreview = () => {
+      preview.style.background = rule.bg;
+      preview.style.color = rule.text;
+      preview.style.borderColor = rule.text;
+    };
+    applyPreview();
+    row.querySelector('[data-role="from"]').addEventListener("input", (e) => {
+      rule.from = e.target.value;
+    });
+    row.querySelector('[data-role="to"]').addEventListener("input", (e) => {
+      rule.to = e.target.value;
+    });
+    row.querySelector('[data-role="bg"]').addEventListener("input", (e) => {
+      rule.bg = e.target.value;
+      applyPreview();
+    });
+    row.querySelector('[data-role="text"]').addEventListener("input", (e) => {
+      rule.text = e.target.value;
+      applyPreview();
+    });
+    row.querySelector('[data-role="remove"]').addEventListener("click", () => {
+      stikerColorRulesDraft.splice(idx, 1);
+      renderStikerColorRulesList();
+    });
+    stikerColorRulesList.appendChild(row);
+  });
+}
+
 // Menampilkan seluruh stiker yang tercentang (ikut urutan data), memakai
 // pratinjau HTML yang sama dengan stiker satuan, supaya tata letak & data
 // yang terlihat di sini identik dengan hasil PDF-nya nanti. User masih bisa
@@ -2201,4 +2345,5 @@ document.addEventListener("keydown", (e) => {
   if (detailModalOverlay?.style.display !== "none") closeDetailModal();
   if (confirmModalOverlay?.style.display !== "none") confirmModalOverlay.style.display = "none";
   if (stikerReviewModalOverlay?.style.display !== "none") closeStikerReviewModal();
+  if (stikerColorModalOverlay?.style.display !== "none") closeStikerColorModal();
 });
