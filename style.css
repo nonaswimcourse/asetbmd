@@ -429,8 +429,8 @@ tbody tr:hover { background: #f9fafb; }
 /* Kartu pratinjau stiker: meniru persis tata letak stiker fisik yang jadi
    contoh (logo Kab. Brebes kiri, judul 3 baris tengah, logo sekolah kanan,
    lalu baris nomor lokasi, kode barang, judul/nama barang, dan baris bawah
-   No.Reg / Tahun / Harga), dengan warna latar modern (bukan hitam-putih
-   polos) senada brand.
+   No.Reg / Tahun / Harga), dengan latar putih polos (teks & garis pakai
+   warna navy brand supaya tetap kontras).
    Lebar kartu SENGAJA dibuat tetap (fixed px, bukan persentase/max-width
    yang mengikuti lebar layar) supaya tata letak & bungkus baris judul
    PERSIS SAMA di laptop maupun mobile — sebelumnya lebar kartu mengikuti
@@ -449,15 +449,15 @@ tbody tr:hover { background: #f9fafb; }
 .stiker-row:last-child { border-bottom: none; }
 .stiker-head {
   position: relative; padding: 6px 4px;
-  background: linear-gradient(135deg, var(--brand-navy), var(--brand-blue) 70%);
+  background: #fff;
   border-bottom: none;
 }
 .stiker-logo-cell, .stiker-logo-cell-right {
   position: absolute; top: 0; bottom: 0; width: 46px; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center; padding: 3px;
 }
-.stiker-logo-cell { left: 0; border-right: 1px solid rgba(255,255,255,0.25); }
-.stiker-logo-cell-right { right: 0; border-left: 1px solid rgba(255,255,255,0.25); }
+.stiker-logo-cell { left: 0; border-right: 1px solid rgba(15, 47, 122, 0.18); }
+.stiker-logo-cell-right { right: 0; border-left: 1px solid rgba(15, 47, 122, 0.18); }
 .stiker-logo-cell img, .stiker-logo-cell-right img {
   width: 38px; height: 38px; object-fit: contain; background: #fff; border-radius: 50%;
   padding: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
@@ -472,7 +472,7 @@ tbody tr:hover { background: #f9fafb; }
 }
 .stiker-title-cell div {
   text-align: center; font-weight: 700; font-size: 0.76rem; line-height: 1.35;
-  text-transform: uppercase; color: #fff;
+  text-transform: uppercase; color: var(--brand-navy);
 }
 /* "Barang Milik Daerah" & "Pemerintah Kabupaten Brebes" adalah teks tetap
    (bukan data dinamis) — dipaksa satu baris karena lebar kartu di atas
@@ -482,12 +482,12 @@ tbody tr:hover { background: #f9fafb; }
 .stiker-title-fixed { white-space: nowrap; }
 .stiker-line { padding: 5px 8px; font-size: 0.8rem; font-weight: 700; text-align: center; color: var(--brand-navy); }
 .stiker-line-small { font-size: 0.72rem; font-weight: 500; color: #334155; }
-.stiker-row:nth-child(2) .stiker-line { background: #e0e7fa; }
-.stiker-row:nth-child(4) .stiker-line { background: #f1f5f9; }
-.stiker-bottom-row { display: flex; background: linear-gradient(135deg, var(--brand-blue), var(--brand-navy) 75%); }
+.stiker-row:nth-child(2) .stiker-line { background: #fff; }
+.stiker-row:nth-child(4) .stiker-line { background: #fff; }
+.stiker-bottom-row { display: flex; background: #fff; }
 .stiker-bottom-cell {
   flex: 1; padding: 6px 4px; text-align: center; font-weight: 700; font-size: 0.85rem;
-  border-right: 1px solid rgba(255,255,255,0.25); color: #fff;
+  border-right: 1px solid rgba(15, 47, 122, 0.18); color: var(--brand-navy);
 }
 .stiker-bottom-cell:last-child { border-right: none; }
 .stiker-empty-hint {
