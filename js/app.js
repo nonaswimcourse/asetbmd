@@ -269,13 +269,37 @@ function updateGroupToggleVisibility() {
 
 
 // ================= DASHBOARD =================
+
+// Menghitung jumlah KELOMPOK (jenis barang unik) untuk satu KIB, bukan jumlah
+// baris/satuan mentah — konsisten dengan Tampilan Kelompok di halaman Data.
+// - KIB C tidak pernah dikelompokkan (tiap baris = satu gedung/bangunan
+//   berdiri sendiri), jadi cukup dihitung count baris seperti biasa.
+// - KIB lain (A, B, D): dikelompokkan berdasarkan "Nama Barang" saja, jadi
+//   cukup select kolom itu.
+// - KIB E (groupByExactMatch): dikelompokkan berdasarkan SELURUH field selain
+//   field per-unit (No Urut/No. Register/ID Pemda), jadi select semua kolom
+//   skema supaya kunci pengelompokannya sama persis dengan tabel Data.
+async function fetchGroupCount(schema) {
+  if (schema.key === "C") {
+    const { count, error } = await supabase.from(schema.table).select("id", { count: "exact", head: true });
+    return { count: error ? null : (count || 0), error };
+  }
+
+  const selectCols = schema.groupByExactMatch ? schema.fields.map((f) => f.key).join(",") : "nama_barang";
+  const { data, error } = await supabase.from(schema.table).select(selectCols);
+  if (error) return { count: null, error };
+
+  const groupCount = new Set((data || []).map((row) => groupKeyForRow(schema, row))).size;
+  return { count: groupCount, error: null };
+}
+
 async function loadDashboard() {
   dashboardStats.innerHTML = Array.from({length: 6}, () => `<div class="stat-card skeleton-card"></div>`).join("");
   dashboardBars.innerHTML = `<div class="dashboard-empty">Mengambil ringkasan data…</div>`;
 
   const results = await Promise.all(KIB_LIST.map(async (schema) => {
-    const { count, error } = await supabase.from(schema.table).select("id", { count: "exact", head: true });
-    return { schema, count: error ? null : (count || 0), error };
+    const { count, error } = await fetchGroupCount(schema);
+    return { schema, count, error };
   }));
 
   const total = results.reduce((sum, item) => sum + (item.count || 0), 0);
@@ -283,14 +307,14 @@ async function loadDashboard() {
   const largest = results.filter((item) => item.count !== null).sort((a,b) => b.count - a.count)[0];
 
   dashboardStats.innerHTML = `
-    <div class="stat-card stat-primary" data-tooltip="${available}/${KIB_LIST.length} KIB terbaca" tabindex="0" aria-label="Total record ${total.toLocaleString("id-ID")}. ${available} dari ${KIB_LIST.length} KIB terbaca.">
+    <div class="stat-card stat-primary" data-tooltip="${available}/${KIB_LIST.length} KIB terbaca" tabindex="0" aria-label="Total kelompok barang ${total.toLocaleString("id-ID")}. ${available} dari ${KIB_LIST.length} KIB terbaca.">
       <div class="stat-icon">▦</div>
-      <div class="stat-content"><span>Total Record</span><strong>${total.toLocaleString("id-ID")}</strong><small>${available}/${KIB_LIST.length} KIB terbaca</small></div>
+      <div class="stat-content"><span>Total Kelompok Barang</span><strong>${total.toLocaleString("id-ID")}</strong><small>${available}/${KIB_LIST.length} KIB terbaca</small></div>
     </div>
     ${results.slice(0,5).map((item) => {
       const description = escapeHtml(item.schema.title.replace(`KIB ${item.schema.key} - `,""));
       return `
-      <button class="stat-card stat-clickable" data-dashboard-kib="${item.schema.key}" data-tooltip="${description}" aria-label="KIB ${item.schema.key}: ${item.count === null ? "data tidak tersedia" : item.count.toLocaleString("id-ID") + " record"}. ${description}">
+      <button class="stat-card stat-clickable" data-dashboard-kib="${item.schema.key}" data-tooltip="${description}" aria-label="KIB ${item.schema.key}: ${item.count === null ? "data tidak tersedia" : item.count.toLocaleString("id-ID") + " kelompok"}. ${description}">
         <div class="stat-icon kib-${item.schema.key}">${item.schema.key}</div>
         <div class="stat-content"><span>KIB ${item.schema.key}</span><strong>${item.count === null ? "—" : item.count.toLocaleString("id-ID")}</strong><small>${description}</small></div>
       </button>`;
@@ -308,7 +332,7 @@ async function loadDashboard() {
   }).join("");
 
   if (largest && largest.count > 0) {
-    dashboardBars.insertAdjacentHTML("afterbegin", `<div class="dashboard-insight">● Data terbanyak saat ini: <b>KIB ${largest.schema.key}</b> dengan ${largest.count.toLocaleString("id-ID")} record.</div>`);
+    dashboardBars.insertAdjacentHTML("afterbegin", `<div class="dashboard-insight">● Data terbanyak saat ini: <b>KIB ${largest.schema.key}</b> dengan ${largest.count.toLocaleString("id-ID")} kelompok.</div>`);
   }
 
   dashboardStats.querySelectorAll("[data-dashboard-kib]").forEach((el) => el.addEventListener("click", () => openDashboardKib(el.dataset.dashboardKib)));
