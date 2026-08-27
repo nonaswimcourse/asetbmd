@@ -681,6 +681,7 @@ function renderGroupedTable(schema, rows) {
        <td class="actions-cell">
          <button class="link-btn" data-action="view-group">Lihat</button>
          <button class="link-btn" data-action="edit-group">Edit</button>
+         <button class="link-btn danger" data-action="delete-group">Hapus</button>
          <button class="link-btn" data-action="pdf-group">⬇ PDF Rangkuman</button>
        </td>`;
 
@@ -688,6 +689,7 @@ function renderGroupedTable(schema, rows) {
       openDetailModal(schema, sample, { groupItems: group.items })
     );
     tr.querySelector('[data-action="edit-group"]').addEventListener("click", () => openGroupEditModal(schema, group));
+    tr.querySelector('[data-action="delete-group"]').addEventListener("click", () => openConfirmModalGroup(schema, group));
     tr.querySelector('[data-action="pdf-group"]').addEventListener("click", () => exportGroupPdf(schema, group, noUrut));
 
     tableBody.appendChild(tr);
@@ -1213,11 +1215,53 @@ assetForm.addEventListener("submit", async (e) => {
 
 // ================= DELETE CONFIRM =================
 
+// deleteTarget menyimpan daftar ID yang akan dihapus (dukung hapus satu baris
+// maupun hapus satu grup sekaligus/banyak unit) beserta baris aslinya (dipakai
+// untuk ikut menghapus file foto terkait di Supabase Storage).
+
 function openConfirmModal(row) {
-  deleteTarget = row;
+  deleteTarget = { ids: [row.id], rows: [row] };
   confirmMessage.textContent = `Hapus data "${row.nama_barang || row.id}"? Tindakan ini tidak dapat dibatalkan.`;
   confirmModalOverlay.style.display = "flex";
 }
+
+// Hapus seluruh unit dalam satu grup (tampilan kelompok) sekaligus.
+function openConfirmModalGroup(schema, group) {
+  deleteTarget = { ids: group.items.map((r) => r.id), rows: group.items };
+  confirmMessage.textContent =
+    `Hapus grup "${group.name}" beserta seluruh ${group.count} unit di dalamnya ` +
+    `(${noUrutLabel(schema)}: ${group.noUrutRange})? Tindakan ini tidak dapat dibatalkan.`;
+  confirmModalOverlay.style.display = "flex";
+}
+
+// Mengubah public URL hasil getPublicUrl() menjadi path relatif di dalam bucket,
+// supaya bisa dipakai untuk storage.remove(). Kalau URL bukan dari bucket foto
+// ini (mis. foto lama dari sumber lain), kembalikan null supaya diabaikan.
+function storagePathFromPublicUrl(url) {
+  if (!url) return null;
+  const marker = `/object/public/${PHOTO_BUCKET}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  const path = url.slice(idx + marker.length).split("?")[0];
+  return path ? decodeURIComponent(path) : null;
+}
+
+// Mengumpulkan semua path foto (dari field bertipe "image" pada skema) yang
+// dipakai oleh baris-baris yang akan dihapus, supaya filenya ikut dibersihkan
+// dari Supabase Storage dan tidak menumpuk memakan kuota.
+function collectPhotoPaths(schema, rows) {
+  const imageFields = schema.fields.filter((f) => f.type === "image");
+  if (imageFields.length === 0) return [];
+  const paths = new Set();
+  rows.forEach((row) => {
+    imageFields.forEach((f) => {
+      const path = storagePathFromPublicUrl(row[f.key]);
+      if (path) paths.add(path);
+    });
+  });
+  return Array.from(paths);
+}
+
 confirmCancelBtn.addEventListener("click", () => {
   confirmModalOverlay.style.display = "none";
   deleteTarget = null;
@@ -1226,9 +1270,24 @@ confirmModalOverlay.addEventListener("click", (e) => {
   if (e.target === confirmModalOverlay) confirmModalOverlay.style.display = "none";
 });
 confirmDeleteBtn.addEventListener("click", async () => {
-  if (!deleteTarget) return;
+  if (!deleteTarget || !deleteTarget.ids || deleteTarget.ids.length === 0) return;
   const schema = currentSchema();
-  const { error } = await supabase.from(schema.table).delete().eq("id", deleteTarget.id);
+  confirmDeleteBtn.disabled = true;
+
+  const { error } = await supabase.from(schema.table).delete().in("id", deleteTarget.ids);
+
+  if (!error) {
+    // Hapus data berhasil: baru hapus file foto terkait dari Storage. Kalau
+    // ini gagal (mis. bucket policy), cukup dicatat di console tanpa
+    // menggagalkan alur hapus data (data sudah terhapus lebih dulu).
+    const photoPaths = collectPhotoPaths(schema, deleteTarget.rows || []);
+    if (photoPaths.length > 0) {
+      const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).remove(photoPaths);
+      if (storageError) console.error("Gagal menghapus foto terkait:", storageError.message);
+    }
+  }
+
+  confirmDeleteBtn.disabled = false;
   if (error) alert("Gagal menghapus: " + error.message);
   confirmModalOverlay.style.display = "none";
   deleteTarget = null;
