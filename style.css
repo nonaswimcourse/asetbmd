@@ -440,7 +440,18 @@ tbody tr:hover { background: #f9fafb; }
    "PEMERINTAH KABUPATEN BREBES" muat dalam SATU baris (tidak terpotong ke
    baris berikutnya). */
 .stiker-card {
-  width: 350px; max-width: 350px; flex: none; background: var(--stiker-bg, #fff);
+  width: 350px; max-width: 350px; flex: none;
+  /* Gradasi 3 warna (atas → tengah → bawah), diatur lewat panel "Warna per
+     Tahun". Dipasang di kartu pembungkus saja (bukan per-baris) supaya
+     gradasinya menyatu mulus dari ujung atas sampai ujung bawah kartu;
+     elemen di dalamnya (.stiker-row dkk.) dibuat transparan supaya gradasi
+     ini yang terlihat tembus di baliknya. */
+  background: linear-gradient(
+    to bottom,
+    var(--stiker-bg-top, #fff),
+    var(--stiker-bg-mid, #fff) 50%,
+    var(--stiker-bg-bottom, #fff)
+  );
   border: 1.5px solid var(--stiker-text, var(--brand-navy)); border-radius: 10px;
   font-family: Arial, Helvetica, sans-serif; overflow: hidden;
   box-shadow: var(--shadow-md);
@@ -449,7 +460,7 @@ tbody tr:hover { background: #f9fafb; }
 .stiker-row:last-child { border-bottom: none; }
 .stiker-head {
   position: relative; padding: 6px 4px;
-  background: var(--stiker-bg, #fff);
+  background: transparent;
   border-bottom: none;
 }
 .stiker-logo-cell, .stiker-logo-cell-right {
@@ -482,9 +493,9 @@ tbody tr:hover { background: #f9fafb; }
 .stiker-title-fixed { white-space: nowrap; }
 .stiker-line { padding: 5px 8px; font-size: 0.8rem; font-weight: 700; text-align: center; color: var(--stiker-text, var(--brand-navy)); }
 .stiker-line-small { font-size: 0.72rem; font-weight: 500; color: var(--stiker-text, #334155); }
-.stiker-row:nth-child(2) .stiker-line { background: var(--stiker-bg, #fff); }
-.stiker-row:nth-child(4) .stiker-line { background: var(--stiker-bg, #fff); }
-.stiker-bottom-row { display: flex; background: var(--stiker-bg, #fff); }
+.stiker-row:nth-child(2) .stiker-line { background: transparent; }
+.stiker-row:nth-child(4) .stiker-line { background: transparent; }
+.stiker-bottom-row { display: flex; background: transparent; }
 .stiker-bottom-cell {
   flex: 1; padding: 6px 4px; text-align: center; font-weight: 700; font-size: 0.85rem;
   border-right: 1px solid var(--stiker-text, rgba(15, 47, 122, 0.18)); color: var(--stiker-text, var(--brand-navy));
