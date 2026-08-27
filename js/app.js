@@ -37,17 +37,19 @@ const STIKER_LOKASI_STORAGE_KEY = "stiker_nomor_lokasi";
 // (disimpan di localStorage browser), jadi tidak perlu edit kode lagi.
 // DEFAULT di bawah cuma dipakai kalau belum pernah diatur / saat tombol
 // "Kembalikan Bawaan" ditekan.
-// - from  : tahun mulai rentang ini berlaku (wajib diisi).
-// - to    : tahun akhir rentang (inklusif). `null` = "seterusnya" (tidak ada
-//           batas atas) sampai ada rentang lain yang menimpanya.
-// - bg    : warna latar belakang stiker (kode HEX, mis. "#ffffff").
-// - text  : warna teks, garis pembatas, dan bingkai stiker (kode HEX).
+// - from     : tahun mulai rentang ini berlaku (wajib diisi).
+// - to       : tahun akhir rentang (inklusif). `null` = "seterusnya" (tidak
+//              ada batas atas) sampai ada rentang lain yang menimpanya.
+// - bgTop    : warna gradasi bagian ATAS stiker (kode HEX, mis. "#ffffff").
+// - bgMiddle : warna gradasi bagian TENGAH stiker (kode HEX).
+// - bgBottom : warna gradasi bagian BAWAH stiker (kode HEX).
+// - text     : warna teks, garis pembatas, dan bingkai stiker (kode HEX).
 // Kalau ada beberapa rentang yang tumpang tindih, yang paling akhir dalam
 // daftar yang menang.
 const STIKER_DEFAULT_COLOR_RULES = [
-  { from: 2023, to: null, bg: "#ffffff", text: "#0f2f7a" }, // 2023-sekarang: putih polos
+  { from: 2023, to: null, bgTop: "#ffffff", bgMiddle: "#ffffff", bgBottom: "#ffffff", text: "#0f2f7a" }, // 2023-sekarang: putih polos
 ];
-const STIKER_DEFAULT_COLOR = { bg: "#ffffff", text: "#0f2f7a" };
+const STIKER_DEFAULT_COLOR = { bgTop: "#ffffff", bgMiddle: "#ffffff", bgBottom: "#ffffff", text: "#0f2f7a" };
 const STIKER_COLOR_RULES_STORAGE_KEY = "stiker_warna_tahun_rules";
 
 // Aturan warna yang sedang aktif dipakai (dimuat dari localStorage kalau
@@ -65,12 +67,20 @@ function loadStikerYearColorRules() {
     if (!Array.isArray(parsed) || parsed.length === 0) return STIKER_DEFAULT_COLOR_RULES.map((r) => ({ ...r }));
     return parsed
       .filter((r) => r && Number.isFinite(Number(r.from)))
-      .map((r) => ({
-        from: Number(r.from),
-        to: r.to === null || r.to === "" || r.to === undefined ? null : Number(r.to),
-        bg: r.bg || STIKER_DEFAULT_COLOR.bg,
-        text: r.text || STIKER_DEFAULT_COLOR.text,
-      }));
+      .map((r) => {
+        // Kompatibel dengan data lama yang cuma punya 1 warna latar (`bg`):
+        // dipakai sebagai warna atas/tengah/bawah supaya tetap tampil sama
+        // (gradasi rata/flat) sampai user mengatur ulang jadi gradasi asli.
+        const legacyBg = r.bg || STIKER_DEFAULT_COLOR.bgTop;
+        return {
+          from: Number(r.from),
+          to: r.to === null || r.to === "" || r.to === undefined ? null : Number(r.to),
+          bgTop: r.bgTop || legacyBg,
+          bgMiddle: r.bgMiddle || legacyBg,
+          bgBottom: r.bgBottom || legacyBg,
+          text: r.text || STIKER_DEFAULT_COLOR.text,
+        };
+      });
   } catch {
     return STIKER_DEFAULT_COLOR_RULES.map((r) => ({ ...r }));
   }
@@ -88,7 +98,7 @@ function getStikerYearColor(year) {
         match = rule;
       }
     }
-    if (match) return { bg: match.bg, text: match.text };
+    if (match) return { bgTop: match.bgTop, bgMiddle: match.bgMiddle, bgBottom: match.bgBottom, text: match.text };
   }
   return STIKER_DEFAULT_COLOR;
 }
@@ -1836,7 +1846,9 @@ stikerColorAddRuleBtn.addEventListener("click", () => {
   stikerColorRulesDraft.push({
     from: lastRule ? (lastRule.to ?? lastRule.from) + 1 : new Date().getFullYear(),
     to: null,
-    bg: "#ffffff",
+    bgTop: "#ffffff",
+    bgMiddle: "#ffffff",
+    bgBottom: "#ffffff",
     text: "#0f2f7a",
   });
   renderStikerColorRulesList();
@@ -1851,7 +1863,9 @@ stikerColorSaveBtn.addEventListener("click", () => {
     .map((r) => ({
       from: Number(r.from),
       to: r.to === null || r.to === "" || r.to === undefined ? null : Number(r.to),
-      bg: r.bg || STIKER_DEFAULT_COLOR.bg,
+      bgTop: r.bgTop || STIKER_DEFAULT_COLOR.bgTop,
+      bgMiddle: r.bgMiddle || STIKER_DEFAULT_COLOR.bgMiddle,
+      bgBottom: r.bgBottom || STIKER_DEFAULT_COLOR.bgBottom,
       text: r.text || STIKER_DEFAULT_COLOR.text,
     }));
   if (cleaned.length === 0) {
@@ -1896,8 +1910,16 @@ function renderStikerColorRulesList() {
         <input type="number" data-role="to" value="${rule.to === null || rule.to === undefined ? "" : rule.to}" placeholder="seterusnya" />
       </div>
       <div class="stiker-color-field">
-        <label>Warna latar</label>
-        <span class="stiker-color-swatch-label"><input type="color" data-role="bg" value="${rule.bg}" /></span>
+        <label>Warna atas</label>
+        <span class="stiker-color-swatch-label"><input type="color" data-role="bgTop" value="${rule.bgTop}" /></span>
+      </div>
+      <div class="stiker-color-field">
+        <label>Warna tengah</label>
+        <span class="stiker-color-swatch-label"><input type="color" data-role="bgMiddle" value="${rule.bgMiddle}" /></span>
+      </div>
+      <div class="stiker-color-field">
+        <label>Warna bawah</label>
+        <span class="stiker-color-swatch-label"><input type="color" data-role="bgBottom" value="${rule.bgBottom}" /></span>
       </div>
       <div class="stiker-color-field">
         <label>Warna teks/garis</label>
@@ -1907,7 +1929,7 @@ function renderStikerColorRulesList() {
     `;
     const preview = row.querySelector('[data-role="preview"]');
     const applyPreview = () => {
-      preview.style.background = rule.bg;
+      preview.style.background = `linear-gradient(to bottom, ${rule.bgTop}, ${rule.bgMiddle}, ${rule.bgBottom})`;
       preview.style.color = rule.text;
       preview.style.borderColor = rule.text;
     };
@@ -1918,8 +1940,16 @@ function renderStikerColorRulesList() {
     row.querySelector('[data-role="to"]').addEventListener("input", (e) => {
       rule.to = e.target.value;
     });
-    row.querySelector('[data-role="bg"]').addEventListener("input", (e) => {
-      rule.bg = e.target.value;
+    row.querySelector('[data-role="bgTop"]').addEventListener("input", (e) => {
+      rule.bgTop = e.target.value;
+      applyPreview();
+    });
+    row.querySelector('[data-role="bgMiddle"]').addEventListener("input", (e) => {
+      rule.bgMiddle = e.target.value;
+      applyPreview();
+    });
+    row.querySelector('[data-role="bgBottom"]').addEventListener("input", (e) => {
+      rule.bgBottom = e.target.value;
       applyPreview();
     });
     row.querySelector('[data-role="text"]').addEventListener("input", (e) => {
@@ -2123,7 +2153,7 @@ function updateStikerPreview() {
   stikerPreview.innerHTML = renderStikerPreviewHtml(schema, previewRow, stikerLokasiInput.value.trim());
 }
 
-// Mengembalikan CSS custom properties (--stiker-bg / --stiker-text) sesuai
+// Mengembalikan CSS custom properties (--stiker-bg-top/mid/bottom & --stiker-text) sesuai
 // warna yang berlaku untuk tahun barang tersebut (lihat STIKER_YEAR_COLOR_RULES
 // di atas). Dipasang sebagai inline style di elemen ".stiker-card" pembungkus
 // (bukan di renderStikerPreviewHtml, karena elemen pembungkus itu dibuat di
@@ -2131,7 +2161,7 @@ function updateStikerPreview() {
 function stikerCardColorVars(schema, row) {
   const year = getRecordYear(schema, row);
   const color = getStikerYearColor(year);
-  return `--stiker-bg:${color.bg}; --stiker-text:${color.text};`;
+  return `--stiker-bg-top:${color.bgTop}; --stiker-bg-mid:${color.bgMiddle}; --stiker-bg-bottom:${color.bgBottom}; --stiker-text:${color.text};`;
 }
 
 function renderStikerPreviewHtml(schema, row, nomorLokasi) {
@@ -2214,9 +2244,42 @@ function stikerPdfColors(schema, row) {
   return {
     text, // teks, garis pembatas & bingkai
     border: text,
-    bg: hexToRgbArray(color.bg), // latar kartu
+    bgTop: hexToRgbArray(color.bgTop), // gradasi latar kartu: atas
+    bgMiddle: hexToRgbArray(color.bgMiddle), // gradasi latar kartu: tengah
+    bgBottom: hexToRgbArray(color.bgBottom), // gradasi latar kartu: bawah
     white: [255, 255, 255], // lingkaran di belakang logo, selalu putih biar logo tetap kontras
   };
+}
+
+// Interpolasi linear antara 2 warna RGB (masing-masing array [r,g,b]), t: 0..1.
+function lerpRgb(c1, c2, t) {
+  return [
+    Math.round(c1[0] + (c2[0] - c1[0]) * t),
+    Math.round(c1[1] + (c2[1] - c1[1]) * t),
+    Math.round(c1[2] + (c2[2] - c1[2]) * t),
+  ];
+}
+
+// jsPDF tidak punya "fill gradient" bawaan yang simpel & konsisten lintas versi,
+// jadi gradasi 3-warna (atas → tengah → bawah) disimulasikan dengan menggambar
+// banyak strip horizontal tipis, tiap strip diberi warna hasil interpolasi
+// linear (paruh atas: bgTop→bgMiddle, paruh bawah: bgMiddle→bgBottom). Jumlah
+// strip cukup besar (steps) supaya transisinya terlihat halus, bukan berblok.
+function drawVerticalGradientRect(doc, x, y, w, h, colorTop, colorMiddle, colorBottom, steps = 60) {
+  const stripH = h / steps;
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1); // 0..1 dari atas ke bawah
+    let color;
+    if (t <= 0.5) {
+      color = lerpRgb(colorTop, colorMiddle, t / 0.5);
+    } else {
+      color = lerpRgb(colorMiddle, colorBottom, (t - 0.5) / 0.5);
+    }
+    doc.setFillColor(...color);
+    // Strip sedikit dilebihkan tingginya (+0.05mm) supaya tidak ada garis
+    // putih tipis di antar-strip akibat pembulatan sub-pixel saat dirender.
+    doc.rect(x, y + i * stripH, w, stripH + 0.05, "F");
+  }
 }
 
 function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
@@ -2227,10 +2290,9 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   const bottomH = h - headerH - lokasiH - kodeH - namaH;
   const c = stikerPdfColors(schema, row);
 
-  // --- latar belakang tiap baris: mengikuti warna tahun barang (lihat
-  // STIKER_YEAR_COLOR_RULES) ---
-  doc.setFillColor(...c.bg);
-  doc.rect(x, y, w, h, "F");
+  // --- latar belakang tiap baris: gradasi 3 warna (atas/tengah/bawah)
+  // mengikuti warna tahun barang (lihat STIKER_YEAR_COLOR_RULES) ---
+  drawVerticalGradientRect(doc, x, y, w, h, c.bgTop, c.bgMiddle, c.bgBottom);
 
   // --- bingkai & garis pembatas (navy, lebih halus dari hitam pekat) ---
   doc.setDrawColor(...c.border);
