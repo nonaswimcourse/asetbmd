@@ -32,6 +32,52 @@ let stikerFilterJudul = ""; // filter dropdown: nama barang / judul buku persis
 let stikerFilterTahun = ""; // filter dropdown: tahun persis
 const STIKER_LOKASI_STORAGE_KEY = "stiker_nomor_lokasi";
 
+// ---------- konfigurasi warna stiker per rentang tahun ----------
+// Atur sendiri di sini: tambah/ubah/hapus baris kapan saja untuk mengubah
+// warna stiker berdasarkan tahun perolehan barang (tahun_pengadaan/
+// tahun_pembelian/dst, sesuai skema KIB masing-masing).
+// - from  : tahun mulai rentang ini berlaku (wajib diisi).
+// - to    : tahun akhir rentang (inklusif). Isi `null` untuk "seterusnya"
+//           (tidak ada batas atas) sampai ada rentang lain yang menimpanya.
+// - bg    : warna latar belakang stiker (kode HEX, mis. "#ffffff").
+// - text  : warna teks, garis pembatas, dan bingkai stiker (kode HEX).
+// Urutan tidak masalah — rentang yang cocok dengan tahun barang dipakai;
+// kalau tahun tidak cocok rentang manapun (atau tidak diketahui), dipakai
+// STIKER_DEFAULT_COLOR di bawah.
+const STIKER_YEAR_COLOR_RULES = [
+  { from: 2023, to: null, bg: "#ffffff", text: "#0f2f7a" }, // 2023-sekarang: putih polos
+  // Contoh menambah rentang baru mulai tahun 2030 (tinggal hapus "//" & isi warnanya):
+  // { from: 2030, to: null, bg: "#fef9c3", text: "#78350f" },
+];
+const STIKER_DEFAULT_COLOR = { bg: "#ffffff", text: "#0f2f7a" };
+
+// Mencari aturan warna yang cocok untuk satu tahun. Kalau ada beberapa
+// rentang yang tumpang tindih, yang paling akhir didefinisikan di
+// STIKER_YEAR_COLOR_RULES yang menang (supaya rentang baru bisa "menimpa"
+// rentang lama tanpa perlu menghapus baris lama).
+function getStikerYearColor(year) {
+  const y = parseInt(year, 10);
+  if (!Number.isNaN(y)) {
+    let match = null;
+    for (const rule of STIKER_YEAR_COLOR_RULES) {
+      if (y >= rule.from && (rule.to === null || rule.to === undefined || y <= rule.to)) {
+        match = rule;
+      }
+    }
+    if (match) return { bg: match.bg, text: match.text };
+  }
+  return STIKER_DEFAULT_COLOR;
+}
+
+// "#rrggbb" -> [r,g,b] (dipakai jsPDF, yang butuh array angka, bukan string HEX)
+function hexToRgbArray(hex) {
+  const clean = (hex || "#000000").replace("#", "");
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  return [r, g, b];
+}
+
 // ---------- DOM refs ----------
 const loginScreen = document.getElementById("loginScreen");
 const appShell = document.getElementById("appShell");
@@ -1766,7 +1812,7 @@ function renderStikerReviewGrid() {
     item.className = "stiker-review-item";
     item.innerHTML =
       `<button type="button" class="stiker-review-remove" data-id="${row.id}">✕ Batalkan</button>` +
-      `<div class="stiker-card">${renderStikerPreviewHtml(schema, row, nomorLokasi)}</div>`;
+      `<div class="stiker-card" style="${stikerCardColorVars(schema, row)}">${renderStikerPreviewHtml(schema, row, nomorLokasi)}</div>`;
     item.querySelector(".stiker-review-remove").addEventListener("click", () => {
       stikerSelectedIds.delete(row.id);
       renderStikerList();
@@ -1925,10 +1971,23 @@ function updateStikerPreview() {
   const previewRow = filtered.find((r) => stikerSelectedIds.has(r.id)) || filtered[0];
 
   if (!previewRow) {
+    stikerPreview.style.cssText = "";
     stikerPreview.innerHTML = `<div class="stiker-empty-hint">Belum ada data untuk dijadikan pratinjau.</div>`;
     return;
   }
+  stikerPreview.style.cssText = stikerCardColorVars(schema, previewRow);
   stikerPreview.innerHTML = renderStikerPreviewHtml(schema, previewRow, stikerLokasiInput.value.trim());
+}
+
+// Mengembalikan CSS custom properties (--stiker-bg / --stiker-text) sesuai
+// warna yang berlaku untuk tahun barang tersebut (lihat STIKER_YEAR_COLOR_RULES
+// di atas). Dipasang sebagai inline style di elemen ".stiker-card" pembungkus
+// (bukan di renderStikerPreviewHtml, karena elemen pembungkus itu dibuat di
+// tempat lain: #stikerPreview di HTML, dan per-item di grid review).
+function stikerCardColorVars(schema, row) {
+  const year = getRecordYear(schema, row);
+  const color = getStikerYearColor(year);
+  return `--stiker-bg:${color.bg}; --stiker-text:${color.text};`;
 }
 
 function renderStikerPreviewHtml(schema, row, nomorLokasi) {
@@ -2001,17 +2060,20 @@ async function generateStikerPdf() {
   doc.save(`stiker_kib_${schema.key.toLowerCase()}.pdf`);
 }
 
-// Palet warna stiker: latar putih polos di semua baris, warna navy brand
-// dipakai untuk garis/bingkai & teks supaya tetap kontras di atas putih.
-const STIKER_COLORS = {
-  navy: [15, 47, 122], // teks & garis kop (header)
-  blue: [15, 47, 122], // teks & garis baris bawah (No.Reg/Tahun/Harga)
-  lokasiTint: [255, 255, 255], // baris Nomor Lokasi
-  kodeTint: [255, 255, 255], // baris Kode Barang
-  namaTint: [255, 255, 255], // baris Nama Barang
-  border: [15, 47, 122],
-  white: [255, 255, 255],
-};
+// Warna stiker di PDF mengikuti tahun perolehan barang (lihat
+// STIKER_YEAR_COLOR_RULES di atas, dekat state cetak stiker) — supaya
+// pratinjau HTML & hasil PDF selalu sinkron, keduanya lewat fungsi yang sama.
+function stikerPdfColors(schema, row) {
+  const year = getRecordYear(schema, row);
+  const color = getStikerYearColor(year);
+  const text = hexToRgbArray(color.text);
+  return {
+    text, // teks, garis pembatas & bingkai
+    border: text,
+    bg: hexToRgbArray(color.bg), // latar kartu
+    white: [255, 255, 255], // lingkaran di belakang logo, selalu putih biar logo tetap kontras
+  };
+}
 
 function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   const headerH = h * 0.26;
@@ -2019,10 +2081,11 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   const kodeH = h * 0.15;
   const namaH = h * 0.2;
   const bottomH = h - headerH - lokasiH - kodeH - namaH;
-  const c = STIKER_COLORS;
+  const c = stikerPdfColors(schema, row);
 
-  // --- latar belakang tiap baris: putih polos di seluruh kartu ---
-  doc.setFillColor(...c.white);
+  // --- latar belakang tiap baris: mengikuti warna tahun barang (lihat
+  // STIKER_YEAR_COLOR_RULES) ---
+  doc.setFillColor(...c.bg);
   doc.rect(x, y, w, h, "F");
 
   // --- bingkai & garis pembatas (navy, lebih halus dari hitam pekat) ---
@@ -2070,7 +2133,7 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   const titleLines = ["BARANG MILIK DAERAH", "PEMERINTAH KABUPATEN BREBES", unit];
   doc.setFont(undefined, "bold");
   doc.setFontSize(6.2);
-  doc.setTextColor(...c.navy);
+  doc.setTextColor(...c.text);
   const lineGap = headerH / (titleLines.length + 0.5);
   // Lebar teks dibatasi simetris (margin kiri = margin kanan = lebar logo)
   // supaya judul benar-benar center di TENGAH KARTU — sejajar dengan baris
@@ -2087,7 +2150,7 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   doc.setDrawColor(...c.border);
   doc.line(x, curY + lokasiH, x + w, curY + lokasiH);
   doc.setFontSize(7);
-  doc.setTextColor(...c.navy);
+  doc.setTextColor(...c.text);
   doc.text(nomorLokasi || "-", x + w / 2, curY + lokasiH / 2 + 1.2, { align: "center" });
 
   // --- baris Kode Barang ---
@@ -2117,7 +2180,7 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   doc.line(x + colW * 2, curY, x + colW * 2, curY + bottomH);
   doc.setFont(undefined, "bold");
   doc.setFontSize(7.3);
-  doc.setTextColor(...c.blue);
+  doc.setTextColor(...c.text);
   const noReg = (row.nomor_register || "-").toString();
   const tahun = getRecordYear(schema, row) || "-";
   const lastColVal = String(stikerLastColValue(schema, row));
