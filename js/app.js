@@ -2001,15 +2001,14 @@ async function generateStikerPdf() {
   doc.save(`stiker_kib_${schema.key.toLowerCase()}.pdf`);
 }
 
-// Palet warna stiker (modern, senada dengan warna brand di style.css:
-// navy/biru tua untuk kop & footer, biru muda untuk baris info, abu-abu
-// lembut untuk baris nama barang) supaya stiker tidak polos hitam-putih.
+// Palet warna stiker: latar putih polos di semua baris, warna navy brand
+// dipakai untuk garis/bingkai & teks supaya tetap kontras di atas putih.
 const STIKER_COLORS = {
-  navy: [15, 47, 122], // kop (header)
-  blue: [29, 78, 216], // baris bawah (No.Reg/Tahun/Harga)
-  lokasiTint: [224, 231, 250], // baris Nomor Lokasi
+  navy: [15, 47, 122], // teks & garis kop (header)
+  blue: [15, 47, 122], // teks & garis baris bawah (No.Reg/Tahun/Harga)
+  lokasiTint: [255, 255, 255], // baris Nomor Lokasi
   kodeTint: [255, 255, 255], // baris Kode Barang
-  namaTint: [241, 245, 249], // baris Nama Barang
+  namaTint: [255, 255, 255], // baris Nama Barang
   border: [15, 47, 122],
   white: [255, 255, 255],
 };
@@ -2022,17 +2021,9 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   const bottomH = h - headerH - lokasiH - kodeH - namaH;
   const c = STIKER_COLORS;
 
-  // --- latar belakang tiap baris (diisi dulu sebelum garis & teks) ---
-  doc.setFillColor(...c.navy);
-  doc.rect(x, y, w, headerH, "F");
-  doc.setFillColor(...c.lokasiTint);
-  doc.rect(x, y + headerH, w, lokasiH, "F");
-  doc.setFillColor(...c.kodeTint);
-  doc.rect(x, y + headerH + lokasiH, w, kodeH, "F");
-  doc.setFillColor(...c.namaTint);
-  doc.rect(x, y + headerH + lokasiH + kodeH, w, namaH, "F");
-  doc.setFillColor(...c.blue);
-  doc.rect(x, y + headerH + lokasiH + kodeH + namaH, w, bottomH, "F");
+  // --- latar belakang tiap baris: putih polos di seluruh kartu ---
+  doc.setFillColor(...c.white);
+  doc.rect(x, y, w, h, "F");
 
   // --- bingkai & garis pembatas (navy, lebih halus dari hitam pekat) ---
   doc.setDrawColor(...c.border);
@@ -2042,7 +2033,7 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   // --- baris header: logo Kab. Brebes kiri + judul 3 baris tengah + logo
   // sekolah (SDN Tanjung 03) kanan, keduanya di atas bidang putih bulat ---
   const logoW = w * 0.22;
-  doc.setDrawColor(255, 255, 255);
+  doc.setDrawColor(...c.border);
   doc.setLineWidth(0.2);
   doc.line(x + logoW, y, x + logoW, y + headerH);
   doc.line(x + w - logoW, y, x + w - logoW, y + headerH);
@@ -2052,8 +2043,8 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   // Logo harus muat persis di dalam sel logo (lebar logoW x tinggi headerH),
   // jadi ukurannya dibatasi oleh sisi TERKECIL dari sel itu (bukan cuma
   // lebar) supaya tidak meluber ke luar garis kop / baris di bawahnya.
-  // Ditambah lingkaran putih di belakang logo supaya logo tetap kontras
-  // di atas latar navy (bukan cuma nempel polos).
+  // Ditambah lingkaran putih di belakang logo supaya logo tetap rapi
+  // di atas latar putih (bukan cuma nempel polos).
   const logoPad = 1.2;
   const logoSize = Math.min(logoW, headerH) - logoPad * 2;
   const logoY = y + (headerH - logoSize) / 2;
@@ -2079,7 +2070,7 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   const titleLines = ["BARANG MILIK DAERAH", "PEMERINTAH KABUPATEN BREBES", unit];
   doc.setFont(undefined, "bold");
   doc.setFontSize(6.2);
-  doc.setTextColor(...c.white);
+  doc.setTextColor(...c.navy);
   const lineGap = headerH / (titleLines.length + 0.5);
   // Lebar teks dibatasi simetris (margin kiri = margin kanan = lebar logo)
   // supaya judul benar-benar center di TENGAH KARTU — sejajar dengan baris
@@ -2120,13 +2111,13 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   // --- baris bawah: No. Register | Tahun | Harga ---
   curY += namaH;
   const colW = w / 3;
-  doc.setDrawColor(255, 255, 255);
+  doc.setDrawColor(...c.border);
   doc.setLineWidth(0.2);
   doc.line(x + colW, curY, x + colW, curY + bottomH);
   doc.line(x + colW * 2, curY, x + colW * 2, curY + bottomH);
   doc.setFont(undefined, "bold");
   doc.setFontSize(7.3);
-  doc.setTextColor(...c.white);
+  doc.setTextColor(...c.blue);
   const noReg = (row.nomor_register || "-").toString();
   const tahun = getRecordYear(schema, row) || "-";
   const lastColVal = String(stikerLastColValue(schema, row));
