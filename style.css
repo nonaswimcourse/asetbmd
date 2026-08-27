@@ -440,24 +440,24 @@ tbody tr:hover { background: #f9fafb; }
    "PEMERINTAH KABUPATEN BREBES" muat dalam SATU baris (tidak terpotong ke
    baris berikutnya). */
 .stiker-card {
-  width: 350px; max-width: 350px; flex: none; background: #fff;
-  border: 1.5px solid var(--brand-navy); border-radius: 10px;
+  width: 350px; max-width: 350px; flex: none; background: var(--stiker-bg, #fff);
+  border: 1.5px solid var(--stiker-text, var(--brand-navy)); border-radius: 10px;
   font-family: Arial, Helvetica, sans-serif; overflow: hidden;
   box-shadow: var(--shadow-md);
 }
-.stiker-row { display: flex; border-bottom: 1px solid rgba(15, 47, 122, 0.18); }
+.stiker-row { display: flex; border-bottom: 1px solid var(--stiker-text, rgba(15, 47, 122, 0.18)); }
 .stiker-row:last-child { border-bottom: none; }
 .stiker-head {
   position: relative; padding: 6px 4px;
-  background: #fff;
+  background: var(--stiker-bg, #fff);
   border-bottom: none;
 }
 .stiker-logo-cell, .stiker-logo-cell-right {
   position: absolute; top: 0; bottom: 0; width: 46px; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center; padding: 3px;
 }
-.stiker-logo-cell { left: 0; border-right: 1px solid rgba(15, 47, 122, 0.18); }
-.stiker-logo-cell-right { right: 0; border-left: 1px solid rgba(15, 47, 122, 0.18); }
+.stiker-logo-cell { left: 0; border-right: 1px solid var(--stiker-text, rgba(15, 47, 122, 0.18)); }
+.stiker-logo-cell-right { right: 0; border-left: 1px solid var(--stiker-text, rgba(15, 47, 122, 0.18)); }
 .stiker-logo-cell img, .stiker-logo-cell-right img {
   width: 38px; height: 38px; object-fit: contain; background: #fff; border-radius: 50%;
   padding: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
@@ -472,7 +472,7 @@ tbody tr:hover { background: #f9fafb; }
 }
 .stiker-title-cell div {
   text-align: center; font-weight: 700; font-size: 0.76rem; line-height: 1.35;
-  text-transform: uppercase; color: var(--brand-navy);
+  text-transform: uppercase; color: var(--stiker-text, var(--brand-navy));
 }
 /* "Barang Milik Daerah" & "Pemerintah Kabupaten Brebes" adalah teks tetap
    (bukan data dinamis) — dipaksa satu baris karena lebar kartu di atas
@@ -480,14 +480,14 @@ tbody tr:hover { background: #f9fafb; }
    karena namanya dinamis (bisa lebih panjang dari sekolah lain), supaya
    tetap membungkus rapi daripada terpotong kalau kepanjangan. */
 .stiker-title-fixed { white-space: nowrap; }
-.stiker-line { padding: 5px 8px; font-size: 0.8rem; font-weight: 700; text-align: center; color: var(--brand-navy); }
-.stiker-line-small { font-size: 0.72rem; font-weight: 500; color: #334155; }
-.stiker-row:nth-child(2) .stiker-line { background: #fff; }
-.stiker-row:nth-child(4) .stiker-line { background: #fff; }
-.stiker-bottom-row { display: flex; background: #fff; }
+.stiker-line { padding: 5px 8px; font-size: 0.8rem; font-weight: 700; text-align: center; color: var(--stiker-text, var(--brand-navy)); }
+.stiker-line-small { font-size: 0.72rem; font-weight: 500; color: var(--stiker-text, #334155); }
+.stiker-row:nth-child(2) .stiker-line { background: var(--stiker-bg, #fff); }
+.stiker-row:nth-child(4) .stiker-line { background: var(--stiker-bg, #fff); }
+.stiker-bottom-row { display: flex; background: var(--stiker-bg, #fff); }
 .stiker-bottom-cell {
   flex: 1; padding: 6px 4px; text-align: center; font-weight: 700; font-size: 0.85rem;
-  border-right: 1px solid rgba(15, 47, 122, 0.18); color: var(--brand-navy);
+  border-right: 1px solid var(--stiker-text, rgba(15, 47, 122, 0.18)); color: var(--stiker-text, var(--brand-navy));
 }
 .stiker-bottom-cell:last-child { border-right: none; }
 .stiker-empty-hint {
