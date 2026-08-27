@@ -508,6 +508,37 @@ tbody tr:hover { background: #f9fafb; }
 .stiker-review-remove:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
 .stiker-review-empty { padding: 2rem; text-align: center; color: var(--text-muted); }
 
+/* Panel "Warna Stiker per Tahun": tiap baris = satu rentang tahun dengan
+   2 color picker (latar & teks/garis) dan tombol hapus. */
+.stiker-color-rules { display: flex; flex-direction: column; gap: 0.7rem; }
+.stiker-color-rule {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+  padding: 0.7rem 0.8rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: #f9fafb;
+}
+.stiker-color-rule .stiker-color-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.stiker-color-rule label { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); }
+.stiker-color-rule input[type="number"] {
+  width: 80px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 0.85rem;
+}
+.stiker-color-rule input[type="color"] {
+  width: 44px; height: 34px; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  cursor: pointer; background: none;
+}
+.stiker-color-rule .stiker-color-swatch-label { display: flex; align-items: center; gap: 0.4rem; }
+.stiker-color-rule-remove {
+  margin-left: auto; align-self: center; background: none; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.78rem; padding: 0.4rem 0.65rem;
+  cursor: pointer;
+}
+.stiker-color-rule-remove:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+.stiker-color-rule-preview {
+  width: 48px; height: 48px; border-radius: var(--radius-sm); border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700;
+  text-align: center; flex: none;
+}
+
 @media (max-width: 900px) {
   .stiker-controls { flex-direction: column; }
   .stiker-field { width: 100%; }
