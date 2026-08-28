@@ -2282,7 +2282,12 @@ function drawVerticalGradientRect(doc, x, y, w, h, colorTop, colorMiddle, colorB
 }
 
 function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
-  const headerH = h * 0.26;
+  // headerH diperbesar (0.26 -> 0.30 dari tinggi kartu) khusus supaya logo
+  // kiri/kanan bisa digambar lebih besar dan tetap jelas saat dicetak;
+  // baris-baris di bawahnya (lokasi/kode/nama) tetap sama, sisa tinggi
+  // diserap oleh bottomH (baris No.Reg/Tahun/Ruang) yang masih cukup lega
+  // untuk satu baris teks.
+  const headerH = h * 0.3;
   const lokasiH = h * 0.15;
   const kodeH = h * 0.15;
   const namaH = h * 0.2;
@@ -2300,7 +2305,10 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
 
   // --- baris header: logo Kab. Brebes kiri + judul 3 baris tengah + logo
   // sekolah (SDN Tanjung 03) kanan, keduanya di atas bidang putih bulat ---
-  const logoW = w * 0.22;
+  // logoW diperbesar (0.22 -> 0.24 dari lebar kartu) sejalan dengan headerH
+  // di atas, supaya logo bulat kiri/kanan tampil lebih besar & tajam saat
+  // dicetak (sebelumnya logo dibatasi terlalu kecil oleh sel logo).
+  const logoW = w * 0.24;
   doc.setDrawColor(...c.border);
   doc.setLineWidth(0.2);
   doc.line(x + logoW, y, x + logoW, y + headerH);
@@ -2313,7 +2321,10 @@ function drawStickerOnPdf(doc, schema, row, nomorLokasi, x, y, w, h) {
   // lebar) supaya tidak meluber ke luar garis kop / baris di bawahnya.
   // Ditambah lingkaran putih di belakang logo supaya logo tetap rapi
   // di atas latar putih (bukan cuma nempel polos).
-  const logoPad = 1.2;
+  // logoPad dikecilkan (1.2 -> 0.6mm) supaya tambahan ruang dari headerH &
+  // logoW di atas benar-benar dipakai membesarkan logo, bukan cuma jadi
+  // margin kosong di sekeliling logo.
+  const logoPad = 0.6;
   const logoSize = Math.min(logoW, headerH) - logoPad * 2;
   const logoY = y + (headerH - logoSize) / 2;
   try {
