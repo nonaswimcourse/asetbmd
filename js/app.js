@@ -2000,7 +2000,7 @@ function renderStikerReviewGrid() {
 
 async function loadStikerData() {
   const schema = KIB_SCHEMAS[stikerKibKey];
-  stikerListBody.innerHTML = `<tr><td class="muted center" colspan="7">Memuat data…</td></tr>`;
+  stikerListBody.innerHTML = `<tr><td class="muted center" colspan="6">Memuat data…</td></tr>`;
   stikerErrorBox.style.display = "none";
   stikerLastColHeader.textContent = stikerHasRuang(schema) ? "Ruang" : "Harga";
 
@@ -2094,7 +2094,7 @@ function renderStikerList() {
   const filtered = getStikerFilteredRows();
 
   if (filtered.length === 0) {
-    stikerListBody.innerHTML = `<tr><td class="muted center" colspan="7">Tidak ada data.</td></tr>`;
+    stikerListBody.innerHTML = `<tr><td class="muted center" colspan="6">Tidak ada data.</td></tr>`;
   } else {
     stikerListBody.innerHTML = "";
     filtered.forEach((row, idx) => {
@@ -2104,10 +2104,9 @@ function renderStikerList() {
       const lastColVal = stikerLastColValue(schema, row);
       tr.innerHTML = `
         <td><input type="checkbox" class="stiker-row-check" ${checked ? "checked" : ""} /></td>
-        <td>${idx + 1}</td>
+        <td>${escapeHtml(row.nomor_register || "-")}</td>
         <td>${escapeHtml(row.kode_barang || "-")}</td>
         <td>${escapeHtml(getStikerDisplayName(row))}</td>
-        <td>${escapeHtml(row.nomor_register || "-")}</td>
         <td>${escapeHtml(getRecordYear(schema, row) || "-")}</td>
         <td>${escapeHtml(String(lastColVal))}</td>
       `;
