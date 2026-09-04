@@ -43,6 +43,11 @@ const baseTail = [
   { key: "keterangan", label: "Keterangan", type: "textarea" },
   { key: "upb", label: "UPB", type: "text" },
   { key: "intra_ekstra", label: "Intra/Ekstra", type: "select", options: INTRA_EKSTRA_OPTIONS },
+  // Bukti pembelian/kwitansi — opsional (tidak wajib diisi), dipakai untuk
+  // semua KIB A-E lewat baseTail. Hasil upload bisa direview: pratinjau
+  // langsung muncul di form saat dipilih/sudah ada, dan bisa dibesarkan
+  // (klik foto) lewat lightbox di form, tabel, maupun modal Detail.
+  { key: "kwitansi_url", label: "Foto Kwitansi / Bukti Pembelian", type: "image" },
 ];
 
 export const KIB_SCHEMAS = {

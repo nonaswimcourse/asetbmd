@@ -197,6 +197,37 @@ const detailModalClose = document.getElementById("detailModalClose");
 const detailModalBody = document.getElementById("detailModalBody");
 const detailCloseBtn = document.getElementById("detailCloseBtn");
 
+// Lightbox foto (review foto kwitansi / foto buku dalam ukuran penuh)
+const imageLightboxOverlay = document.getElementById("imageLightboxOverlay");
+const imageLightboxImg = document.getElementById("imageLightboxImg");
+const imageLightboxCaption = document.getElementById("imageLightboxCaption");
+const imageLightboxClose = document.getElementById("imageLightboxClose");
+
+function openImageLightbox(url, label) {
+  if (!url) return;
+  imageLightboxImg.src = url;
+  imageLightboxImg.alt = label || "Pratinjau foto";
+  imageLightboxCaption.textContent = label || "";
+  imageLightboxOverlay.style.display = "flex";
+}
+
+function closeImageLightbox() {
+  imageLightboxOverlay.style.display = "none";
+  imageLightboxImg.src = "";
+}
+
+imageLightboxClose.addEventListener("click", closeImageLightbox);
+imageLightboxOverlay.addEventListener("click", (e) => {
+  if (e.target === imageLightboxOverlay) closeImageLightbox();
+});
+
+// Delegasi klik: berlaku untuk semua thumbnail foto yang dirender sebagai
+// HTML string (tabel & modal Detail) — termasuk foto kwitansi dan foto buku.
+document.addEventListener("click", (e) => {
+  const img = e.target.closest(".table-thumb, .detail-photo");
+  if (img && img.src) openImageLightbox(img.src, img.alt);
+});
+
 // Mobile nav (hamburger drawer)
 const hamburgerBtn = document.getElementById("hamburgerBtn");
 const sidebarCloseBtn = document.getElementById("sidebarCloseBtn");
@@ -631,7 +662,7 @@ function renderCell(f, row) {
   if (f.type === "image") {
     const url = row[f.key];
     return url
-      ? `<img src="${escapeHtml(url)}" alt="foto" class="table-thumb" />`
+      ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(f.label)}" class="table-thumb" />`
       : `<span class="muted">-</span>`;
   }
   if (f.type === "currency") {
@@ -838,6 +869,8 @@ function buildImageField(f, record) {
   preview.src = currentUrl || "";
   preview.style.display = currentUrl ? "block" : "none";
   preview.alt = f.label;
+  // Klik pratinjau untuk melihat hasil upload dalam ukuran penuh (review).
+  preview.addEventListener("click", () => openImageLightbox(preview.src, f.label));
 
   const controls = document.createElement("div");
   controls.className = "image-field-controls";
