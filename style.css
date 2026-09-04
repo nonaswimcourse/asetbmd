@@ -327,6 +327,28 @@ tbody tr:hover { background: #f9fafb; }
 .table-thumb {
   width: 40px; height: 54px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); display: block;
 }
+/* Foto yang bisa diklik untuk dibesarkan (review hasil upload) */
+.table-thumb, .detail-photo, .image-preview {
+  cursor: zoom-in;
+  transition: opacity 0.15s ease;
+}
+.table-thumb:hover, .detail-photo:hover, .image-preview:hover { opacity: 0.85; }
+
+/* Lightbox: lihat foto ukuran penuh (kwitansi, foto buku, dll) */
+.lightbox-overlay { background: rgba(15, 23, 42, 0.82); }
+.lightbox-card {
+  position: relative; max-width: min(92vw, 640px); max-height: 90vh;
+  display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+}
+.lightbox-card img {
+  max-width: 100%; max-height: 78vh; object-fit: contain;
+  border-radius: var(--radius-sm); background: #fff; box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+}
+.lightbox-caption { color: #f8fafc; font-size: 0.85rem; text-align: center; margin: 0; }
+.lightbox-close {
+  position: absolute; top: -2.6rem; right: 0; background: rgba(255,255,255,0.15); color: #fff;
+}
+.lightbox-close:hover { background: rgba(255,255,255,0.3); }
 
 /* Field terkunci saat edit grup (mis. No. Register, beda per unit) */
 .form-field.locked input { background: #f3f4f6; color: var(--text-muted); cursor: not-allowed; }
